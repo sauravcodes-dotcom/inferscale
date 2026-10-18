@@ -1,0 +1,31 @@
+# E1 baseline: single-stream latency of qwen3-8b-q4km-v1 on the M1 Pro, through the gateway
+# and directly against the engine (for gateway overhead).
+# Preconditions (enforced by preflight): fresh restart, AC power, swap <= 64 MB,
+# no Chrome/Safari/Ollama, reviewed triage_v1 dataset.
+name: e1_baseline
+description: Single-stream baseline, triage_v1 test prompts, gateway vs engine
+workload:
+  dataset: triage_v1
+  split: test
+  prompt: triage_v1
+  n_requests: null        # null = every item in the split (240)
+  max_tokens: 256
+  temperature: 0
+mode: closed
+concurrency: [1]
+warmup: 5
+repeats: 3
+cooldown_s: 120
+targets: [gateway, engine]
+gateway_url: http://127.0.0.1:8000
+engine_url: http://127.0.0.1:8081
+engine_log: logs/engine.log
+max_swap_growth_mb: 32
+seed: 1234
+report: reports/e1_baseline.md
+preflight:
+  enforce: true
+  require_ac: true
+  max_swap_mb_start: 64
+  require_reviewed_dataset: true
+  forbidden_processes: ["^Google Chrome( Helper.*)?$", "^Safari$", "^[Oo]llama.*"]

@@ -9,3 +9,5 @@ __pycache__/
 .ruff_cache/
 logs/
 /results/eval/**/*-smoke.json
+/results/bench/bench_smoke/
+/reports/bench_smoke.md

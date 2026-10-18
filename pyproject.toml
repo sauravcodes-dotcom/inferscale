@@ -24,6 +24,8 @@ dev = [
     "types-pyyaml",
     "jsonschema>=4.26.0",
     "types-jsonschema>=4.26.0.20261006",
+    "psutil>=7.2.2",
+    "types-psutil>=7.2.2.20260906",
 ]
 
 [build-system]
@@ -52,6 +54,8 @@ select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "RUF"]
 "tests/**" = ["ASYNC110"]
 # Scenario templates are long literal log lines.
 "scripts/draft_triage_v1.py" = ["E501"]
+# Markdown report templates.
+"bench/analyze.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"
