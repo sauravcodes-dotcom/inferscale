@@ -1,0 +1,214 @@
+{
+ "config": {
+  "base_url": "http://127.0.0.1:8000",
+  "concurrency": 1,
+  "max_tokens": 1024,
+  "model_version": "qwen3-8b-q4km-v1",
+  "n": 103,
+  "response_format": "json_schema",
+  "split": "dev",
+  "streaming": true,
+  "temperature": 0
+ },
+ "fingerprint": {
+  "dataset": {
+   "ids_sha256": "96866049425a324fb9e172fbf860eacff3aeb8d0641ad8b5dba36e5a6d825b32",
+   "name": "pag",
+   "partition": "dev",
+   "source_commit": "ea4860499ab2fd8b0f7d1ac835257b70bb6e4d3a",
+   "source_sha256": "5a68a736d9ab53a9049daabda27818388812c734c2f8eba836d37279e88c7be7",
+   "split_file": "splits/pag_v1.json",
+   "split_sha256": "93bfbf9c32835986ff13cf2c9fc233189d662c27d9fdf179a8a9b3d4cc2124e8"
+  },
+  "engine": {
+   "props": {
+    "build_info": "b11669-620d2225c",
+    "model_path": "/Users/sauravsharma/models/qwen3-8b-gguf/Qwen3-8B-Q4_K_M.gguf",
+    "total_slots": 2
+   },
+   "registry_version": "b11669"
+  },
+  "git": {
+   "dirty": true,
+   "sha": "a3672a65e46968cf8a6d9f8ed87c49428b2ba46c"
+  },
+  "host": {
+   "battery": "-InternalBattery-0 (id=23527523)\t100%; finishing charge; 0:00 remaining present: true",
+   "chip": "Apple M1 Pro",
+   "macos_version": "26.5",
+   "memory_gb": 16,
+   "os": "Darwin",
+   "power_source": "AC",
+   "python": "3.12.12"
+  },
+  "model": {
+   "engine": "llama.cpp",
+   "engine_version": "b11669",
+   "file": "Qwen3-8B-Q4_K_M.gguf",
+   "hf_repo": "Qwen/Qwen3-8B-GGUF",
+   "hf_revision": "7c41481f57cb95916b40956ab2f0b139b296d974",
+   "quant": "Q4_K_M",
+   "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+   "thinking": false,
+   "version": "qwen3-8b-q4km-v1"
+  },
+  "prompt": {
+   "prompt_sha256": "7f78b01ac94ffb941366f9dca7d1570d21fffea048018f98de8efa2ec4e13345",
+   "prompt_version": "pag_v1.p2",
+   "schema": "pag_output_v1.json",
+   "system_prompt_sha256": "1c6576086389f207f4e89abab7331c0e97dc4663d22af0869bb9693de431333d"
+  }
+ },
+ "finished_at": "2026-10-18T01:40:05+00:00",
+ "label": "dev (not final)",
+ "quality": {
+  "bootstrap": {
+   "ci": 0.95,
+   "n_boot": 1000,
+   "seed": 1234
+  },
+  "corrective_coverage": {
+   "ci95": [
+    0.199323,
+    0.217106
+   ],
+   "value": 0.208061
+  },
+  "corrective_f1": {
+   "ci95": [
+    0.203798,
+    0.222282
+   ],
+   "value": 0.212997
+  },
+  "corrective_precision": {
+   "ci95": [
+    0.209047,
+    0.230873
+   ],
+   "value": 0.220102
+  },
+  "format_ok": {
+   "ci95": [
+    1.0,
+    1.0
+   ],
+   "value": 1.0
+  },
+  "grounded": {
+   "ci95": [
+    1.0,
+    1.0
+   ],
+   "value": 1.0
+  },
+  "grounded_substring": {
+   "ci95": [
+    0.165049,
+    0.330097
+   ],
+   "value": 0.242718
+  },
+  "invalid_breakdown": {
+   "http_error": 0,
+   "length": 0,
+   "parse": 0,
+   "schema": 0,
+   "timeout": 0
+  },
+  "n": 103,
+  "preventive_coverage": {
+   "ci95": [
+    0.219875,
+    0.240199
+   ],
+   "value": 0.229828
+  },
+  "preventive_f1": {
+   "ci95": [
+    0.220862,
+    0.241924
+   ],
+   "value": 0.231173
+  },
+  "preventive_precision": {
+   "ci95": [
+    0.222757,
+    0.245248
+   ],
+   "value": 0.233697
+  },
+  "severity_correct": {
+   "ci95": [
+    0.456311,
+    0.640777
+   ],
+   "value": 0.543689
+  },
+  "severity_majority_baseline": 0.543689,
+  "team_correct": {
+   "ci95": [
+    0.834951,
+    0.951456
+   ],
+   "value": 0.893204
+  },
+  "team_macro_f1": {
+   "ci95": [
+    0.866632,
+    0.956396
+   ],
+   "value": 0.915242
+  },
+  "type_correct": {
+   "ci95": [
+    1.0,
+    1.0
+   ],
+   "value": 1.0
+  },
+  "type_macro_f1": {
+   "ci95": [
+    1.0,
+    1.0
+   ],
+   "value": 1.0
+  },
+  "valid": {
+   "ci95": [
+    1.0,
+    1.0
+   ],
+   "value": 1.0
+  }
+ },
+ "raw_jsonl": "results/eval/raw/qwen3-8b-q4km-v1/20261018T012331Z-dev-pag_v1.p2-json_schema.jsonl",
+ "run_kind": "full",
+ "serving": {
+  "completion_tokens_total": 21081,
+  "decode_tok_s": {
+   "mean": 24.106893203883498,
+   "p50": 24.44,
+   "p95": 24.53
+  },
+  "e2e_ms": {
+   "mean": 9649.226213592234,
+   "p50": 9522.1,
+   "p95": 11102.77
+  },
+  "finish_reasons": {
+   "stop": 103
+  },
+  "prompt_tokens_total": 55799,
+  "requests_failed": 0,
+  "requests_ok": 103,
+  "ttft_ms": {
+   "mean": 1151.36213592233,
+   "p50": 1102.5,
+   "p95": 1475.7900000000002
+  },
+  "wall_s": 994.68
+ },
+ "started_at": "2026-10-18T01:23:31+00:00",
+ "task": "pag_v1"
+}

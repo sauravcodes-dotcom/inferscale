@@ -42,7 +42,47 @@ Configuration lives in `configs/serving/mac-llamacpp.yaml`. Any field can be ove
 Endpoints: `/v1/chat/completions`, `/healthz` (process alive), `/readyz` (engine healthy,
 registry loaded and not draining), `/metrics`.
 
+## Evaluation (PAG incident analysis)
+
+The model gets the incident fields of a PAG record (summary, description, detection method, impact,
+region, timestamps) and must return JSON with severity, root-cause type and team, a root-cause
+summary, and corrective and preventive actions (`evals/schemas/pag_output_v1.json`). It sees no
+labels. Requests go through the gateway, streaming, at temperature 0.
+
+```bash
+make fetch-data        # download PAG at the pinned commit into data/pag/ (git-ignored), verify sha256
+make split             # rebuild splits/pag_v1.json (deterministic; committed)
+make baselines         # generic + retrieval baselines -> results/baselines/pag_v1.json
+make eval-smoke        # 10 dev items (smoke, not a result)
+make eval-dev          # full dev split (103); --prompt-version pag_v1.p1|pag_v1.p2
+```
+
+The test split (495) is held out. `run_eval` refuses it unless you pass
+`--i-am-running-final-test`, and only with the prompt of the most recent full dev run.
+`make check-data-text` (`scripts/check_no_dataset_text.py`) fails if any tracked file contains PAG text.
+
+## Data and licence
+
+- **Source:** PAG (Postmortem Action Generation) synthetic cloud-incident dataset,
+  <https://github.com/sancharichowdhuri2/PAG>, file `PAG-Synthetic-Cloud-Incident-Dataset.json`,
+  pinned to commit `ea4860499ab2fd8b0f7d1ac835257b70bb6e4d3a`, sha256
+  `5a68a736d9ab53a9049daabda27818388812c734c2f8eba836d37279e88c7be7` (950 records; 850 used
+  after excluding source indices 0-99, which duplicate later records).
+- **Licence:** the PAG repository has **no LICENSE file**, so this repository does not
+  redistribute any PAG records, descriptions, summaries or reference actions. The data is
+  synthetic, and its labels are not known to be human-validated.
+- **Getting the data:** `make fetch-data` downloads the file from the pinned commit into the
+  git-ignored `data/pag/` and verifies the sha256.
+- **What is committed:**
+  - split membership by Incident_ID and source index (`splits/pag_v1.json`);
+  - aggregate metrics, environment fingerprints and ID-list hashes (`results/baselines/`,
+    `results/eval/<model>/*.json`);
+  - code, prompts, the output schema and the grounding lexicon.
+
+  Per-example predictions are written to the git-ignored `results/eval/raw/`, because they sit
+  next to reference text. Model outputs are committed only if they contain no PAG text.
+
 ## Status
 
-**No benchmark results yet.** The numbers in the bring-up notes are single smoke-test requests,
-not benchmarks.
+**No final benchmark results yet.** Dev-split numbers are for prompt development, not final
+results. The held-out test split has not been run.

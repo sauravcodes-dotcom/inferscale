@@ -1,4 +1,4 @@
-.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev
+.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev check-data-text
 
 HOST ?= 127.0.0.1
 PORT ?= 8000
@@ -49,3 +49,6 @@ eval-smoke:
 
 eval-dev:
 	uv run python -m evals.run_eval --split dev
+
+check-data-text:
+	uv run python scripts/check_no_dataset_text.py
