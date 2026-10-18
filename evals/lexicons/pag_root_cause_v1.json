@@ -1,0 +1,15 @@
+{
+  "version": "pag_root_cause_v1",
+  "description": "Per Root_Cause_Type keyword stems for the grounding metric. An action list is grounded if any action contains any stem (lowercase substring) for the gold type. Stems are hand-picked from the type name plus close synonyms; they are not the full type string.",
+  "keywords": {
+    "Auth-Access Errors": ["auth", "access", "permission", "credential", "iam", "identity", "token"],
+    "Config Errors": ["config", "setting", "parameter"],
+    "Dependency Failures": ["dependenc", "upstream", "third-party", "downstream"],
+    "Hardware Issues": ["hardware", "firmware", "disk", "physical"],
+    "Monitoring Gaps": ["monitoring", "alerting", "observability", "visibility"],
+    "Network Connectivity Issues": ["connectivity", "network", "routing", "packet"],
+    "Network Overload Issues": ["overload", "congestion", "bandwidth", "traffic", "throttl"],
+    "Performance Degradation": ["performance", "latency", "degradation", "bottleneck"],
+    "Provisioning Failures": ["provision", "capacity", "allocation"]
+  }
+}

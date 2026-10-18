@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://inferscale.example/schemas/pag_output_v1.json",
+  "title": "pag_output_v1",
+  "description": "Model output for the PAG incident task: severity, root cause and CAPM actions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["severity", "root_cause_type", "root_cause_team", "root_cause_summary",
+               "corrective_actions", "preventive_actions"],
+  "properties": {
+    "severity": {"type": "string", "enum": ["Sev-1", "Sev-2"]},
+    "root_cause_type": {
+      "type": "string",
+      "enum": ["Auth-Access Errors", "Config Errors", "Dependency Failures", "Hardware Issues",
+               "Monitoring Gaps", "Network Connectivity Issues", "Network Overload Issues",
+               "Performance Degradation", "Provisioning Failures"]
+    },
+    "root_cause_team": {
+      "type": "string",
+      "enum": ["AI/ ML Services", "API and Identity Services", "Artifacts and Key Mgmt",
+               "Compute and Infrastructure", "Database Services", "Logging", "Marketplace",
+               "Networking Services", "Storage Services"]
+    },
+    "root_cause_summary": {"type": "string", "minLength": 1, "maxLength": 300},
+    "corrective_actions": {
+      "type": "array", "minItems": 3, "maxItems": 6,
+      "items": {"type": "string", "minLength": 20, "maxLength": 600}
+    },
+    "preventive_actions": {
+      "type": "array", "minItems": 3, "maxItems": 6,
+      "items": {"type": "string", "minLength": 20, "maxLength": 600}
+    }
+  }
+}
