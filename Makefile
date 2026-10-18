@@ -1,4 +1,4 @@
-.PHONY: setup lint format typecheck test test-integration engine serve eval-smoke bench-e1 bench-smoke
+.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke
 
 HOST ?= 127.0.0.1
 PORT ?= 8000
@@ -28,9 +28,6 @@ engine:
 
 serve:
 	uv run uvicorn --factory inferscale.api.app:app_factory --host $(HOST) --port $(PORT) --timeout-graceful-shutdown 35
-
-eval-smoke:
-	uv run python -m evals.run_eval --split dev --limit 5 --response-format $(or $(RF),none)
 
 bench-e1:
 	uv run python -m bench.run_experiment configs/experiments/e1_baseline.yaml

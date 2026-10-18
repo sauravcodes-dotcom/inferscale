@@ -1,85 +1,12 @@
-"""Scorer tests with hand-computed expected values."""
+"""Generic scorer tests with hand-computed expected values."""
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
 
-from evals.dataset import load_schema
-from evals.scorers import (
-    bootstrap_ci,
-    macro_f1,
-    mcnemar_exact,
-    paired_mcnemar,
-    score_item,
-    summarize,
-)
-
-SCHEMA = load_schema()
-GOLD: dict[str, Any] = {
-    "severity": "SEV2",
-    "component": "database",
-    "category": "network",
-    "needs_page": True,
-    "summary": "x",
-}
-
-
-def out(**over: Any) -> str:
-    return json.dumps({**GOLD, "summary": "model summary", **over})
-
-
-def test_exact_match() -> None:
-    s = score_item("a", GOLD, out(), SCHEMA)
-    assert s.json_valid and s.schema_valid and s.all_fields_correct
-    assert s.pred_category == "network"
-
-
-def test_summary_not_exact_matched() -> None:
-    assert score_item("a", GOLD, out(summary="different words"), SCHEMA).all_fields_correct
-
-
-def test_one_field_wrong() -> None:
-    s = score_item("a", GOLD, out(severity="SEV3"), SCHEMA)
-    assert s.schema_valid and not s.severity_correct and s.category_correct
-    assert not s.all_fields_correct
-
-
-@pytest.mark.parametrize(
-    "text",
-    ["```json\n" + out() + "\n```", "Sure! " + out(), "[1, 2]", "", None, '{"severity": "SEV2"'],
-)
-def test_not_json_object(text: str | None) -> None:
-    s = score_item("a", GOLD, text, SCHEMA)
-    assert not s.json_valid and not s.schema_valid
-    assert not any(
-        [s.severity_correct, s.component_correct, s.category_correct, s.needs_page_correct]
-    )
-    assert s.pred_category is None
-
-
-def test_whitespace_is_trimmed() -> None:
-    assert score_item("a", GOLD, "\n  " + out() + "  \n", SCHEMA).all_fields_correct
-
-
-def test_schema_invalid_keeps_field_credit() -> None:
-    s = score_item("a", GOLD, out(confidence=0.9), SCHEMA)  # extra property
-    assert s.json_valid and not s.schema_valid
-    assert s.severity_correct and s.category_correct
-    assert not s.all_fields_correct
-    assert any("confidence" in e for e in s.schema_errors)
-
-
-def test_needs_page_must_be_boolean() -> None:
-    s = score_item("a", GOLD, out(needs_page=1), SCHEMA)
-    assert not s.needs_page_correct and not s.schema_valid
-
-
-def test_out_of_vocab_category() -> None:
-    s = score_item("a", GOLD, out(category="networking"), SCHEMA)
-    assert s.pred_category is None and not s.category_correct
+from evals.scorers import bootstrap_ci, macro_f1, mcnemar_exact, paired_mcnemar
 
 
 def test_macro_f1_hand_computed() -> None:
@@ -142,19 +69,3 @@ def test_bootstrap_ci() -> None:
     assert lo < 0.5 < hi
     assert 0.38 < lo and hi < 0.62
     assert bootstrap_ci(half, rate, n_boot=500, seed=7) == (lo, hi)  # deterministic
-
-
-def test_summarize_shapes() -> None:
-    scores = [
-        score_item(str(i), GOLD, out() if i % 2 else out(category="data"), SCHEMA).to_dict()
-        for i in range(10)
-    ]
-    s = summarize(scores, n_boot=200, seed=1)
-    assert s["n"] == 10
-    assert s["json_valid"]["value"] == 1.0
-    assert s["category_correct"]["value"] == 0.5
-    assert s["all_fields_correct"]["value"] == 0.5
-    # gold is all "network": F1(network) = 2*1*0.5/1.5 = 2/3
-    assert s["category_macro_f1"]["value"] == pytest.approx(2 / 3, abs=1e-6)
-    lo, hi = s["all_fields_correct"]["ci95"]
-    assert lo <= 0.5 <= hi

@@ -5,8 +5,7 @@ Latency metrics (per measured, successful request):
 - ITL = gaps between consecutive content deltas (pooled over requests);
 - decode rate = (completion_tokens - 1) / (t_last_delta - t_first_delta), None if < 2 tokens.
 System throughput = completion tokens of measured requests / measured window.
-Gateway overhead = median TTFT(gateway) - median TTFT(engine), bootstrap CI resampling each
-side independently. Missing values are printed as n/a, never estimated.
+Missing values are printed as n/a, never estimated.
 
 Usage: uv run python -m bench.analyze [RESULT.json] [--out reports/x.md]
 """
@@ -125,21 +124,6 @@ def run_metrics(run: dict[str, Any], n_boot: int = 1000, seed: int = 1234) -> di
     }
 
 
-def gateway_overhead(
-    gw: Sequence[float], eng: Sequence[float], n_boot: int = 1000, seed: int = 1234
-) -> dict[str, Any]:
-    if not gw or not eng:
-        return {"median_s": None, "ci95": None}
-    point = statistics.median(gw) - statistics.median(eng)
-    rng = random.Random(seed)
-    diffs = []
-    for _ in range(n_boot):
-        a = [gw[rng.randrange(len(gw))] for _ in range(len(gw))]
-        b = [eng[rng.randrange(len(eng))] for _ in range(len(eng))]
-        diffs.append(statistics.median(a) - statistics.median(b))
-    return {"median_s": point, "ci95": [percentile(diffs, 2.5), percentile(diffs, 97.5)]}
-
-
 BUFFER_RE = re.compile(r"(\w+(?:_Mapped)?) (model|KV|compute|output) buffer size =\s+([\d.]+) MiB")
 
 
@@ -174,24 +158,6 @@ def analyze(result: dict[str, Any], n_boot: int = 1000, seed: int = 1234) -> dic
         m["valid"] = all(run.get("validity", {}).get("valid") is not False for run in runs)
         m["repeats"] = len(runs)
         pooled[key] = m
-    overhead = {}
-    loads = sorted({k.split("|")[1] for k in groups})
-    for load in loads:
-        gw, eng = groups.get(f"gateway|{load}"), groups.get(f"engine|{load}")
-        if gw and eng:
-            g = [
-                v
-                for run in gw
-                for r in measured(run["records"])
-                if r.get("ok") and (v := ttft(r)) is not None
-            ]
-            e = [
-                v
-                for run in eng
-                for r in measured(run["records"])
-                if r.get("ok") and (v := ttft(r)) is not None
-            ]
-            overhead[load] = gateway_overhead(g, e, n_boot, seed)
     samples = [s for run in result["runs"] for s in run.get("samples", [])]
     rss = [s["engine_rss_bytes"] for s in samples if s.get("engine_rss_bytes") is not None]
     pressure = [s["memory_pressure"] for s in samples if s.get("memory_pressure") is not None]
@@ -199,7 +165,6 @@ def analyze(result: dict[str, Any], n_boot: int = 1000, seed: int = 1234) -> dic
     log = result.get("experiment", {}).get("engine_log")
     return {
         "pooled": pooled,
-        "gateway_overhead_ttft": overhead,
         "memory": {
             "peak_engine_rss_bytes": max(rss) if rss else None,
             "max_memory_pressure": max(pressure) if pressure else None,
@@ -275,17 +240,6 @@ def render_markdown(result: dict[str, Any], a: dict[str, Any]) -> str:
         )
         if m["errors"]:
             lines.append(f"|  | errors: {m['errors']} |" + " |" * 13)
-    lines += ["", "**Gateway overhead (median TTFT gateway - engine):**", ""]
-    if a["gateway_overhead_ttft"]:
-        for load, o in a["gateway_overhead_ttft"].items():
-            ci = o["ci95"]
-            ci_txt = (
-                "n/a" if not ci or None in ci else f"[{ci[0] * 1000:.1f}, {ci[1] * 1000:.1f}] ms"
-            )
-            med = "n/a" if o["median_s"] is None else f"{o['median_s'] * 1000:.1f} ms"
-            lines.append(f"- {load}: {med} (95% CI {ci_txt})")
-    else:
-        lines.append("- n/a (needs both gateway and engine targets)")
     mem = a["memory"]
     rss = mem["peak_engine_rss_bytes"]
     bufs = mem["engine_buffers_mib"]

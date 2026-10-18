@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from bench.analyze import decode_rate, e2e, gateway_overhead, itls, percentile, run_metrics, ttft
+from bench.analyze import decode_rate, e2e, itls, percentile, run_metrics, ttft
 
 
 @pytest.mark.parametrize(
@@ -90,11 +90,3 @@ def test_missing_fields_stay_none() -> None:
     )
     assert m["ttft_s"]["p50"] is None and m["decode_tok_s"]["p50"] is None
     assert m["ttft_s"]["p50_ci95"] is None
-
-
-def test_gateway_overhead() -> None:
-    o = gateway_overhead([0.30, 0.31, 0.32], [0.29, 0.30, 0.31], n_boot=200, seed=1)
-    assert o["median_s"] == pytest.approx(0.01)
-    lo, hi = o["ci95"]
-    assert lo <= 0.01 <= hi
-    assert gateway_overhead([], [0.1])["median_s"] is None

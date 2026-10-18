@@ -1,4 +1,4 @@
-"""Streaming load generator for the gateway (or the engine directly).
+"""Streaming load generator for the InferScale gateway.
 
 Per request it records send time, first content-delta time (TTFT), every content-delta
 timestamp (for inter-token latency), end time, usage tokens, HTTP status and error code.
@@ -54,7 +54,8 @@ class RequestRecord:
 class Target:
     name: str
     base_url: str
-    model: str | None = None  # sent as "model" (gateway); the engine ignores it
+    model: str | None = None
+    extra: dict[str, Any] = field(default_factory=dict)  # e.g. response_format
 
     def body(
         self, messages: list[dict[str, str]], max_tokens: int, temperature: float
@@ -68,6 +69,7 @@ class Target:
         }
         if self.model:
             b["model"] = self.model
+        b.update(self.extra)
         return b
 
 

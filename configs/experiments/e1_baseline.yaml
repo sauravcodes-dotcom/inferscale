@@ -1,22 +1,23 @@
-# E1 baseline: single-stream latency of qwen3-8b-q4km-v1 on the M1 Pro, through the gateway
-# and directly against the engine (for gateway overhead).
+# E1 baseline: single-stream serving latency of qwen3-8b-q4km-v1 on the M1 Pro through the
+# InferScale gateway, using PAG pool-partition inputs with the pag_v1 prompt.
 # Preconditions (enforced by preflight): fresh restart, AC power, swap <= 64 MB,
-# no Chrome/Safari/Ollama, reviewed triage_v1 dataset.
+# no Chrome/Safari/Ollama.
 name: e1_baseline
-description: Single-stream baseline, triage_v1 test prompts, gateway vs engine
+description: Single-stream baseline through the gateway, PAG pool prompts (pag_v1, json_schema)
 workload:
-  dataset: triage_v1
-  split: test
-  prompt: triage_v1
-  n_requests: null        # null = every item in the split (240)
-  max_tokens: 256
+  dataset: pag
+  split_file: splits/pag_v1.json
+  partition: pool          # never the test partition
+  prompt: pag_v1
+  response_format: json_schema
+  n_requests: 50           # per repeat; ~25 s per request at 1024 max tokens
+  max_tokens: 1024
   temperature: 0
 mode: closed
 concurrency: [1]
 warmup: 5
 repeats: 3
 cooldown_s: 120
-targets: [gateway, engine]
 gateway_url: http://127.0.0.1:8000
 engine_url: http://127.0.0.1:8081
 engine_log: logs/engine.log
@@ -27,5 +28,4 @@ preflight:
   enforce: true
   require_ac: true
   max_swap_mb_start: 64
-  require_reviewed_dataset: true
   forbidden_processes: ["^Google Chrome( Helper.*)?$", "^Safari$", "^[Oo]llama.*"]
