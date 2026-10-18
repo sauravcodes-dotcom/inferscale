@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ import httpx
 import pytest
 
 from evals import run_eval
-from evals.prompts import pag_v1
+from evals.prompts import pag_v1, pag_v1_p2
 from inferscale.backends.fake import FakeBackend
 from tests.conftest import AppFactory
 from tests.evals.test_pag import raw_record
@@ -99,7 +100,7 @@ async def test_dev_run_writes_raw_and_summary(
     ):
         assert key in r0
     assert r0["valid"] and r0["finish_reason"] == "stop" and r0["http_status"] == 200
-    assert r0["prediction"] == CANNED and r0["prompt_version"] == "pag_v1.p1"
+    assert r0["prediction"] == CANNED and r0["prompt_version"] == "pag_v1.p2"
     sent = backend.requests[0]
     assert sent["temperature"] == 0 and sent["max_tokens"] == 1024
     assert sent["response_format"]["json_schema"]["name"] == "pag_output_v1"
@@ -112,7 +113,7 @@ async def test_dev_run_writes_raw_and_summary(
     assert q["type_correct"]["value"] == pytest.approx(1 / 3)  # records cycle through 3 types
     assert q["severity_majority_baseline"] == pytest.approx(2 / 3)
     assert s["fingerprint"]["dataset"]["ids_sha256"] == run_eval.ids_sha256(data[2])
-    assert s["fingerprint"]["prompt"]["prompt_sha256"] == pag_v1.prompt_sha256()
+    assert s["fingerprint"]["prompt"]["prompt_sha256"] == pag_v1_p2.prompt_sha256()  # default p2
     assert "raw_prediction" not in json.dumps(s)  # summary carries metrics only
     assert s["serving"]["requests_ok"] == 3 and s["serving"]["finish_reasons"] == {"stop": 3}
 
@@ -144,7 +145,7 @@ async def test_test_split_guard(
     make_app: AppFactory, data: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     res = tmp_path / "res"
-    app, _ = make_app(FakeBackend(tokens=(json.dumps(CANNED),)))
+    app, _ = make_app(FakeBackend(tokens=(json.dumps(CANNED),)), limits=LIMITS)
     transport = httpx.ASGITransport(app=app)
     with pytest.raises(SystemExit, match="needs --i-am-running-final-test"):
         await run_eval.run(args(data, res, "--split", "test"), transport=transport)
@@ -164,8 +165,42 @@ async def test_test_split_guard(
         args(data, res, "--split", "test", "--i-am-running-final-test"), transport=transport
     )
     assert json.loads(out.read_text())["label"] == "test (final)"
-    monkeypatch.setattr(pag_v1, "prompt_sha256", lambda: "0" * 64)
-    with pytest.raises(SystemExit, match="prompt changed"):
+    monkeypatch.setattr(pag_v1_p2, "prompt_sha256", lambda: "0" * 64)
+    with pytest.raises(SystemExit, match="is not the prompt of the most recent full dev run"):
         await run_eval.run(
             args(data, res, "--split", "test", "--i-am-running-final-test"), transport=transport
         )
+
+
+async def test_guard_accepts_only_latest_dev_prompt(
+    make_app: AppFactory, data: Any, tmp_path: Path
+) -> None:
+    res = tmp_path / "res"
+    app, _ = make_app(FakeBackend(tokens=(json.dumps(CANNED),)), limits=LIMITS)
+    transport = httpx.ASGITransport(app=app)
+    p1, p2 = ("--prompt-version", "pag_v1.p1"), ("--prompt-version", "pag_v1.p2")
+    final = ("--split", "test", "--i-am-running-final-test")
+    await run_eval.run(args(data, res, "--split", "dev", *p1), transport=transport)
+    with pytest.raises(SystemExit, match=r"pag_v1.p2 .* most recent full dev run \(pag_v1.p1"):
+        await run_eval.run(args(data, res, *final, *p2), transport=transport)
+    await asyncio.sleep(1.1)  # result files are named by second
+    await run_eval.run(args(data, res, "--split", "dev", *p2), transport=transport)
+    with pytest.raises(SystemExit, match=r"pag_v1\.p1"):
+        await run_eval.run(args(data, res, *final, *p1), transport=transport)
+    out, _ = await run_eval.run(args(data, res, *final, *p2), transport=transport)
+    assert json.loads(out.read_text())["fingerprint"]["prompt"]["prompt_version"] == "pag_v1.p2"
+
+
+def test_prompt_versions() -> None:
+    from evals.prompts import get_prompt
+
+    assert get_prompt("pag_v1.p1") is pag_v1 and get_prompt("pag_v1.p2") is pag_v1_p2
+    assert pag_v1.prompt_sha256() != pag_v1_p2.prompt_sha256()
+    assert "exactly 4 corrective" not in pag_v1.SYSTEM_PROMPT
+    assert "exactly 4 actions that fix" in pag_v1_p2.SYSTEM_PROMPT
+    assert "exactly as it is written in the Description" in pag_v1_p2.SYSTEM_PROMPT
+    assert pag_v1_p2.response_format("json_schema") == pag_v1.response_format("json_schema")
+    inp = {k: "x" for k in pag_v1.INPUT_ORDER}
+    assert pag_v1_p2.build_messages(inp)[1] == pag_v1.build_messages(inp)[1]  # same user message
+    with pytest.raises(ValueError):
+        get_prompt("pag_v1.p9")

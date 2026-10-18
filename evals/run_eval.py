@@ -2,12 +2,12 @@
 
 Outputs:
 - per-example JSONL with predictions and reference fields (contains dataset text, git-ignored):
-  results/eval/raw/<model_version>/<ts>-<split>-<rf>[-smoke].jsonl
+  results/eval/raw/<model_version>/<ts>-<split>-<prompt>-<rf>[-smoke].jsonl
 - summary JSON with metrics, environment fingerprint and the hash of the ID list (committed):
-  results/eval/<model_version>/<ts>-<split>-<rf>.json  (smoke runs go to results/eval/smoke/)
+  results/eval/<model_version>/<ts>-<split>-<prompt>-<rf>.json  (smoke runs: results/eval/smoke/)
 
 The test split is refused unless --i-am-running-final-test is passed AND the prompt (prompt
-file + output schema, by sha256) is unchanged since the most recent full dev run.
+file + output schema, by sha256) is the prompt of the most recent full dev run.
 
 Usage:
   uv run python -m evals.run_eval --split dev [--limit 10]
@@ -34,7 +34,7 @@ from bench.harness import RequestRecord, Target, stream_one
 from evals.dataset import ROOT, sha256_file
 from evals.datasets.pag import SOURCE, load_records
 from evals.fingerprint import engine_props, git_state, host_state
-from evals.prompts import pag_v1 as prompt
+from evals.prompts import DEFAULT_PAG_PROMPT, PAG_PROMPTS, get_prompt
 from evals.scorers import classify_output, load_lexicon, score_pag_item, summarize_pag
 from inferscale.registry import load_registry
 
@@ -52,13 +52,13 @@ def partition_ids(split_file: Path, partition: str) -> list[str]:
     return ids
 
 
-def last_dev_prompt_sha(model_version: str, results: Path = RESULTS) -> str | None:
+def last_dev_prompt(model_version: str, results: Path = RESULTS) -> dict[str, str] | None:
     runs = sorted((results / model_version).glob("*-dev-*.json"))
     for path in reversed(runs):
         s = json.loads(path.read_text())
         if s.get("run_kind") == "full":
-            sha: str | None = s["fingerprint"]["prompt"]["prompt_sha256"]
-            return sha
+            fp: dict[str, str] = s["fingerprint"]["prompt"]
+            return fp
     return None
 
 
@@ -70,12 +70,16 @@ def check_test_allowed(
         return None
     if not args.i_am_running_final_test:
         return "the test split needs --i-am-running-final-test"
-    last = last_dev_prompt_sha(model_version, results)
+    last = last_dev_prompt(model_version, results)
     if last is None:
         return "no full dev run recorded for this model; run --split dev first"
-    if last != prompt.prompt_sha256():
-        now = prompt.prompt_sha256()
-        return f"prompt changed since the last dev run (dev {last[:12]}, now {now[:12]})"
+    prompt = get_prompt(args.prompt_version)
+    now = prompt.prompt_sha256()
+    if last["prompt_sha256"] != now:
+        return (
+            f"prompt {prompt.PROMPT_VERSION} ({now[:12]}) is not the prompt of the most recent "
+            f"full dev run ({last['prompt_version']}, {last['prompt_sha256'][:12]})"
+        )
     return None
 
 
@@ -88,6 +92,7 @@ async def run(
     refusal = check_test_allowed(args, model_version, Path(args.results_dir))
     if refusal:
         raise SystemExit(f"refusing to run: {refusal}")
+    prompt = get_prompt(args.prompt_version)
 
     ids = partition_ids(Path(args.split_file), args.split)
     if args.limit:
@@ -105,7 +110,7 @@ async def run(
     started = datetime.now(UTC)
     stamp = started.strftime("%Y%m%dT%H%M%SZ")
     suffix = "-smoke" if run_kind == "smoke" else ""
-    name = f"{stamp}-{args.split}-{args.response_format}{suffix}"
+    name = f"{stamp}-{args.split}-{prompt.PROMPT_VERSION}-{args.response_format}{suffix}"
     raw_path = Path(args.results_dir) / "raw" / model_version / f"{name}.jsonl"
     raw_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -260,6 +265,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="http://127.0.0.1:8081",
         help="for the /props fingerprint ('' to skip)",
     )
+    ap.add_argument("--prompt-version", choices=sorted(PAG_PROMPTS), default=DEFAULT_PAG_PROMPT)
     ap.add_argument("--response-format", choices=("json_schema", "none"), default="json_schema")
     ap.add_argument("--limit", type=int, default=None, help="first N items; marks the run as smoke")
     ap.add_argument("--concurrency", type=int, default=1)
