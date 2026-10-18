@@ -382,3 +382,116 @@ async def test_request_log_line(make_app: AppFactory, capsys: pytest.CaptureFixt
     assert rec["outcome"] == "ok" and rec["completion_tokens"] == 6
     assert "disk at 97%" not in json.dumps(rec)  # no prompt content
     assert "Hello" not in json.dumps(rec)  # no response content
+
+
+# --- tool calling ----------------------------------------------------------------
+
+TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "parameters": {
+            "type": "object",
+            "properties": {"city": {"type": "string"}},
+            "required": ["city"],
+        },
+    },
+}
+CALLS = (
+    {"name": "get_weather", "arguments": {"city": "Paris"}},
+    {"name": "get_weather", "arguments": {"city": "Oslo"}},
+)
+
+
+def assemble_tool_calls(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    calls: dict[int, dict[str, str]] = {}
+    for c in chunks:
+        for ch in c.get("choices") or []:
+            for tc in (ch.get("delta") or {}).get("tool_calls") or []:
+                slot = calls.setdefault(tc["index"], {"name": "", "arguments": ""})
+                slot["name"] += (tc.get("function") or {}).get("name") or ""
+                slot["arguments"] += (tc.get("function") or {}).get("arguments") or ""
+    return [
+        {"name": calls[i]["name"], "arguments": json.loads(calls[i]["arguments"])}
+        for i in sorted(calls)
+    ]
+
+
+async def test_tool_call_non_stream(
+    make_app: AppFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    backend = FakeBackend(tool_calls=CALLS)
+    app, gw = make_app(backend)
+    async with client_for(app) as c:
+        r = await c.post(
+            "/v1/chat/completions",
+            json=chat_body(tools=[TOOL], parallel_tool_calls=True),
+            headers={"X-Request-ID": "tool-1"},
+        )
+    assert r.status_code == 200
+    choice = r.json()["choices"][0]
+    assert choice["finish_reason"] == "tool_calls" and choice["message"]["content"] is None
+    got = [
+        (t["function"]["name"], json.loads(t["function"]["arguments"]))
+        for t in choice["message"]["tool_calls"]
+    ]
+    assert got == [("get_weather", {"city": "Paris"}), ("get_weather", {"city": "Oslo"})]
+    assert (
+        backend.requests[0]["tools"] == [TOOL]
+        and backend.requests[0]["parallel_tool_calls"] is True
+    )
+    m = gw.metrics.render().decode()
+    assert metric_value(m, "inferscale_finish_reasons_total", 'reason="tool_calls"') == 1
+    log = next(json.loads(x) for x in capsys.readouterr().out.splitlines() if '"tool-1"' in x)
+    assert log["n_tools"] == 1 and log["finish_reason"] == "tool_calls"
+    assert "Paris" not in json.dumps(log)  # arguments are content: never logged
+
+
+async def test_tool_call_stream(make_app: AppFactory) -> None:
+    app, gw = make_app(FakeBackend(tool_calls=CALLS))
+    async with client_for(app) as c:
+        r = await c.post("/v1/chat/completions", json=chat_body(stream=True, tools=[TOOL]))
+    assert r.status_code == 200
+    chunks = sse_chunks(r.text)
+    assert sse_data(r.text)[-1] == "[DONE]"
+    assert assemble_tool_calls(chunks) == [dict(c) for c in CALLS]
+    assert chunks[-1]["choices"][0]["finish_reason"] == "tool_calls"
+    assert gw.admission.inflight == 0
+
+
+async def test_tool_choice_none_and_text_fallback(make_app: AppFactory) -> None:
+    app, _ = make_app(FakeBackend(tool_calls=CALLS))
+    async with client_for(app) as c:
+        r = await c.post("/v1/chat/completions", json=chat_body(tools=[TOOL], tool_choice="none"))
+        plain = await c.post("/v1/chat/completions", json=chat_body())  # no tools -> text
+    assert r.json()["choices"][0]["message"]["content"] == EXPECTED_TEXT
+    assert plain.json()["choices"][0]["message"]["content"] == EXPECTED_TEXT
+
+
+async def test_tool_result_round_trip(make_app: AppFactory) -> None:
+    backend = FakeBackend()
+    app, _ = make_app(backend)
+    call = {
+        "id": "call_0",
+        "type": "function",
+        "function": {"name": "get_weather", "arguments": '{"city":"Paris"}'},
+    }
+    body = {
+        "messages": [
+            {"role": "user", "content": "weather in Paris?"},
+            {"role": "assistant", "content": None, "tool_calls": [call]},
+            {"role": "tool", "tool_call_id": "call_0", "content": '{"temp_c": 11}'},
+        ],
+        "tools": [TOOL],
+        "max_tokens": 32,
+    }
+    async with client_for(app) as c:
+        r = await c.post("/v1/chat/completions", json=body)
+    assert r.status_code == 200
+    sent = backend.requests[0]["messages"]
+    assert sent[1]["tool_calls"] == [call] and sent[2]["tool_call_id"] == "call_0"
+
+
+async def test_invalid_tools_rejected_400(client: httpx.AsyncClient) -> None:
+    r = await client.post("/v1/chat/completions", json=chat_body(tool_choice="required"))
+    assert r.status_code == 400 and r.json()["error"]["code"] == "invalid_request"

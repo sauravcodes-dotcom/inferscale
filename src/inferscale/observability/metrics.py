@@ -57,6 +57,12 @@ class Metrics:
         self.rejected = Counter(
             "inferscale_rejected", "Requests rejected by admission", ["reason"], registry=r
         )
+        self.finish_reasons = Counter(
+            "inferscale_finish_reasons",
+            "Completed generations by engine finish_reason (stop, length, tool_calls)",
+            ["reason"],
+            registry=r,
+        )
         self.engine_up = Gauge(
             "inferscale_engine_up", "1 if the engine health check passes", registry=r
         )

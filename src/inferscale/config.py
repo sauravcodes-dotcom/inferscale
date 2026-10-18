@@ -39,6 +39,8 @@ class LimitsConfig(_Section):
     max_input_chars: int = Field(default=16000, ge=1)
     max_tokens_cap: int = Field(default=512, ge=1)
     default_max_tokens: int = Field(default=256, ge=1)
+    max_tools: int = Field(default=128, ge=1)
+    max_tools_chars: int = Field(default=65536, ge=1)
 
 
 class Settings(BaseSettings):

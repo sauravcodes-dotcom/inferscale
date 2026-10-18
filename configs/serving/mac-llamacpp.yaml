@@ -19,6 +19,8 @@ limits:
   max_input_chars: 16000
   max_tokens_cap: 1024     # PAG eval uses max_tokens 1024
   default_max_tokens: 256
+  max_tools: 128
+  max_tools_chars: 65536
 
 drain_timeout_s: 30.0
 health_poll_interval_s: 2.0

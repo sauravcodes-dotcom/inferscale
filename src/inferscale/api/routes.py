@@ -50,6 +50,8 @@ class RequestRecord:
         self.prompt_tokens: int | None = None
         self.completion_tokens: int | None = None
         self.error: str | None = None
+        self.n_tools = 0
+        self.finish_reason: str | None = None
         self._done = False
 
     def fail(self, err: GatewayError) -> None:
@@ -60,6 +62,11 @@ class RequestRecord:
     def set_usage(self, usage: tuple[int, int] | None) -> None:
         if usage is not None:
             self.prompt_tokens, self.completion_tokens = usage
+
+    def observe_choices(self, body: Json) -> None:
+        for choice in body.get("choices") or []:
+            if choice.get("finish_reason"):
+                self.finish_reason = str(choice["finish_reason"])
 
     def finish(self) -> None:
         if self._done:
@@ -75,6 +82,8 @@ class RequestRecord:
             m.prompt_tokens.inc(self.prompt_tokens)
         if self.completion_tokens:
             m.completion_tokens.inc(self.completion_tokens)
+        if self.finish_reason:
+            m.finish_reasons.labels(reason=self.finish_reason).inc()
         self.gw.log.info(
             "request",
             request_id=self.request_id,
@@ -87,6 +96,8 @@ class RequestRecord:
             duration_ms=round(duration * 1000, 1),
             prompt_tokens=self.prompt_tokens,
             completion_tokens=self.completion_tokens,
+            n_tools=self.n_tools,
+            finish_reason=self.finish_reason,
         )
 
 
@@ -142,6 +153,7 @@ async def chat_completions(request: Request) -> Response:
             raise InvalidRequestError("request body must be valid JSON") from None
         rec.stream = isinstance(body, dict) and bool(body.get("stream"))
         req = _parse(body, gw)
+        rec.n_tools = len(req.tools or [])
         try:
             await gw.admission.acquire()
         except RejectedError as e:
@@ -163,6 +175,7 @@ async def _complete(gw: Gateway, rec: RequestRecord, payload: Json, deadline: De
     try:
         result = await run_with_deadline(gw.backend.complete(payload), deadline)
         rec.set_usage(extract_usage(result))
+        rec.observe_choices(result)
     except GatewayError as e:
         rec.fail(e)
         raise
@@ -226,6 +239,7 @@ async def _stream(
         try:
             while chunk is not None:
                 rec.set_usage(extract_usage(chunk))
+                rec.observe_choices(chunk)
                 out = rewrite_chunk(chunk, gw.model_version, req.wants_usage_chunk)
                 if out is not None:
                     yield sse_event(out)

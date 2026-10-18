@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from typing import Literal
 
@@ -29,6 +30,7 @@ class FakeBackend:
         mode: FakeMode = "ok",
         healthy: bool = True,
         prompt_tokens: int = 7,
+        tool_calls: tuple[Json, ...] | None = None,
     ) -> None:
         self.tokens = tokens
         self.token_delay_s = token_delay_s
@@ -36,6 +38,9 @@ class FakeBackend:
         self.mode: FakeMode = mode
         self.healthy = healthy
         self.prompt_tokens = prompt_tokens
+        # When set and the request carries tools, respond with these calls instead of text.
+        # Each item: {"name": ..., "arguments": {...}}.
+        self.tool_calls = tool_calls
         self.active_streams = 0
         self.streams_closed_early = 0
         self.requests: list[Json] = []
@@ -65,9 +70,45 @@ class FakeBackend:
     async def health(self) -> bool:
         return self.healthy
 
+    def _wants_tools(self, payload: Json) -> bool:
+        return (
+            bool(self.tool_calls)
+            and bool(payload.get("tools"))
+            and payload.get("tool_choice") != "none"
+        )
+
+    def _calls(self) -> list[Json]:
+        return [
+            {
+                "id": f"call_{i}",
+                "type": "function",
+                "function": {"name": c["name"], "arguments": json.dumps(c["arguments"])},
+            }
+            for i, c in enumerate(self.tool_calls or ())
+        ]
+
     async def complete(self, payload: Json) -> Json:
         self.requests.append(payload)
         await self._before_output()
+        if self._wants_tools(payload):
+            return {
+                "id": "chatcmpl-fake",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "fake-engine-model",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": self._calls(),
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ],
+                "usage": self._usage(len(self.tool_calls or ())),
+            }
         n = self._n_tokens(payload)
         if self.token_delay_s:
             await asyncio.sleep(self.token_delay_s * n)
@@ -101,6 +142,31 @@ class FakeBackend:
         finished = False
         try:
             await self._before_output()
+            if self._wants_tools(payload):
+                yield self._chunk({"role": "assistant", "content": None})
+                for i, call in enumerate(self._calls()):
+                    fn = call["function"]
+                    head = {
+                        "index": i,
+                        "id": call["id"],
+                        "type": "function",
+                        "function": {"name": fn["name"], "arguments": ""},
+                    }
+                    yield self._chunk({"tool_calls": [head]})
+                    args = fn["arguments"]
+                    for part in (args[: len(args) // 2], args[len(args) // 2 :]):
+                        yield self._chunk(
+                            {"tool_calls": [{"index": i, "function": {"arguments": part}}]}
+                        )
+                yield self._chunk({}, "tool_calls")
+                if (payload.get("stream_options") or {}).get("include_usage"):
+                    yield {
+                        **self._chunk({}),
+                        "choices": [],
+                        "usage": self._usage(len(self._calls())),
+                    }
+                finished = True
+                return
             n = self._n_tokens(payload)
             yield self._chunk({"role": "assistant", "content": ""})
             for i, tok in enumerate(self.tokens[:n]):

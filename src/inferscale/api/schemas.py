@@ -15,9 +15,77 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+FUNCTION_NAME = r"^[A-Za-z0-9_.\-]{1,128}$"  # OpenAI allows [A-Za-z0-9_-]; BFCL also uses dots
+
+
+class ToolCallFunction(_Strict):
+    name: str = Field(pattern=FUNCTION_NAME)
+    arguments: str
+
+
+class ToolCall(_Strict):
+    """A tool call echoed back by the client in an assistant message."""
+
+    id: str | None = None
+    type: Literal["function"] = "function"
+    index: int | None = None
+    function: ToolCallFunction
+
+
 class ChatMessage(_Strict):
-    role: Literal["system", "user", "assistant"]
-    content: str
+    role: Literal["system", "user", "assistant", "tool"]
+    content: str | None = None
+    tool_calls: list[ToolCall] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
+
+    @model_validator(mode="after")
+    def _role_fields(self) -> ChatMessage:
+        if self.tool_calls is not None and self.role != "assistant":
+            raise ValueError("tool_calls are only allowed on assistant messages")
+        if self.role == "tool":
+            if self.tool_call_id is None or self.content is None:
+                raise ValueError("tool messages need tool_call_id and content")
+        elif self.tool_call_id is not None:
+            raise ValueError("tool_call_id is only allowed on tool messages")
+        if self.role in ("system", "user") and self.content is None:
+            raise ValueError(f"{self.role} messages need content")
+        if self.role == "assistant" and self.content is None and not self.tool_calls:
+            raise ValueError("assistant messages need content or tool_calls")
+        return self
+
+    def char_count(self) -> int:
+        n = len(self.content or "")
+        for tc in self.tool_calls or []:
+            n += len(tc.function.name) + len(tc.function.arguments)
+        return n
+
+
+class FunctionDef(_Strict):
+    name: str = Field(pattern=FUNCTION_NAME)
+    description: str | None = None
+    parameters: dict[str, Any] | None = None
+    strict: bool | None = None
+
+    @model_validator(mode="after")
+    def _parameters_shape(self) -> FunctionDef:
+        if self.parameters is not None and self.parameters.get("type", "object") != "object":
+            raise ValueError("function parameters must be a JSON schema of type 'object'")
+        return self
+
+
+class Tool(_Strict):
+    type: Literal["function"]
+    function: FunctionDef
+
+
+class NamedFunction(_Strict):
+    name: str = Field(pattern=FUNCTION_NAME)
+
+
+class NamedToolChoice(_Strict):
+    type: Literal["function"]
+    function: NamedFunction
 
 
 MAX_SCHEMA_BYTES = 16_384
@@ -68,6 +136,23 @@ class ChatCompletionRequest(_Strict):
     stream: bool = False
     stream_options: StreamOptions | None = None
     response_format: ResponseFormat | None = None
+    tools: list[Tool] | None = Field(default=None, min_length=1)
+    tool_choice: Literal["none", "auto", "required"] | NamedToolChoice | None = None
+    parallel_tool_calls: bool | None = None
+
+    @model_validator(mode="after")
+    def _tools_consistent(self) -> ChatCompletionRequest:
+        if self.tools is None and (
+            self.tool_choice not in (None, "none") or self.parallel_tool_calls
+        ):
+            raise ValueError("tool_choice / parallel_tool_calls require tools")
+        if isinstance(self.tool_choice, NamedToolChoice) and self.tools is not None:
+            names = {t.function.name for t in self.tools}
+            if self.tool_choice.function.name not in names:
+                raise ValueError(
+                    f"tool_choice names unknown function {self.tool_choice.function.name!r}"
+                )
+        return self
 
     @property
     def wants_usage_chunk(self) -> bool:
@@ -78,9 +163,17 @@ class ChatCompletionRequest(_Strict):
             raise InvalidRequestError(
                 f"too many messages: {len(self.messages)} > {limits.max_messages}"
             )
-        chars = sum(len(m.content) for m in self.messages)
+        chars = sum(m.char_count() for m in self.messages)
         if chars > limits.max_input_chars:
             raise InvalidRequestError(f"input too long: {chars} > {limits.max_input_chars} chars")
+        if self.tools is not None:
+            if len(self.tools) > limits.max_tools:
+                raise InvalidRequestError(f"too many tools: {len(self.tools)} > {limits.max_tools}")
+            tool_chars = len(json.dumps([t.model_dump(exclude_none=True) for t in self.tools]))
+            if tool_chars > limits.max_tools_chars:
+                raise InvalidRequestError(
+                    f"tool definitions too large: {tool_chars} > {limits.max_tools_chars} chars"
+                )
         if self.max_tokens is not None and self.max_tokens > limits.max_tokens_cap:
             raise InvalidRequestError(
                 f"max_tokens {self.max_tokens} exceeds cap {limits.max_tokens_cap}"
