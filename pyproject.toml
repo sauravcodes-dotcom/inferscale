@@ -1,0 +1,55 @@
+[project]
+name = "inferscale"
+version = "0.1.0"
+description = "Minimal LLM inference gateway with admission control, deadlines and metrics"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
+    "pydantic>=2",
+    "pydantic-settings",
+    "prometheus-client",
+    "structlog",
+    "pyyaml",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "mypy",
+    "types-pyyaml",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/inferscale"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["integration: requires a running llama-server on 127.0.0.1:8081"]
+addopts = "-m 'not integration'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Short sleep-polling on gateway state is fine in tests.
+"tests/**" = ["ASYNC110"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]

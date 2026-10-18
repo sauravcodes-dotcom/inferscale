@@ -1,0 +1,25 @@
+# Serving profile: single M1 Pro, llama.cpp engine on localhost.
+# Any field can be overridden by env INFERSCALE_<FIELD> (nested: INFERSCALE_LIMITS__MAX_TOKENS_CAP).
+engine_url: http://127.0.0.1:8081
+registry_path: configs/models/registry.yaml
+
+admission:
+  max_inflight: 2          # = engine slots (-np)
+  max_queue: 8
+  queue_timeout_s: 10.0
+  retry_after_s: 1
+
+deadlines:
+  connect_timeout_s: 2.0
+  first_token_timeout_s: 30.0
+  total_timeout_s: 120.0
+
+limits:
+  max_messages: 32
+  max_input_chars: 16000
+  max_tokens_cap: 512
+  default_max_tokens: 256
+
+drain_timeout_s: 30.0
+health_poll_interval_s: 2.0
+log_content: false
