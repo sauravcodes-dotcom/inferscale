@@ -27,6 +27,18 @@ class InvalidRequestError(GatewayError):
     outcome = "client_error"
 
 
+class ContextLengthExceededError(InvalidRequestError):
+    """The prompt (messages + tool definitions) does not fit the engine's per-slot context."""
+
+    code = "context_length_exceeded"
+
+
+class EngineRejectedError(InvalidRequestError):
+    """The engine refused the request (4xx): a client-side problem, not an engine fault."""
+
+    code = "engine_rejected_request"
+
+
 class ModelNotFoundError(InvalidRequestError):
     status = 404
     code = "model_not_found"

@@ -2,6 +2,20 @@
 # Start llama-server (llama.cpp build 11669) for InferScale. All values overridable via env.
 set -euo pipefail
 
+# Optional profile (configs/engine/<name>.env) supplies defaults; explicit ENGINE_* env still wins.
+ENGINE_PROFILE="${ENGINE_PROFILE:-default}"
+PROFILE_FILE="$(dirname "$0")/../configs/engine/${ENGINE_PROFILE}.env"
+if [[ -f "$PROFILE_FILE" ]]; then
+  while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" == \#* ]] && continue
+    [[ -z "${!key:-}" ]] && export "$key=$value"
+  done < "$PROFILE_FILE"
+else
+  echo "unknown engine profile: $ENGINE_PROFILE ($PROFILE_FILE)" >&2
+  exit 1
+fi
+echo "engine profile: $ENGINE_PROFILE (ctx=${ENGINE_CTX} parallel=${ENGINE_PARALLEL} reasoning=${ENGINE_REASONING})" >&2
+
 ENGINE_BIN="${ENGINE_BIN:-llama-server}"
 ENGINE_MODEL="${ENGINE_MODEL:-$HOME/models/qwen3-8b-gguf/Qwen3-8B-Q4_K_M.gguf}"
 ENGINE_HOST="${ENGINE_HOST:-127.0.0.1}"

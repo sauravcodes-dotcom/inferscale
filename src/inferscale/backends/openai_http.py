@@ -8,7 +8,12 @@ from collections.abc import AsyncIterator
 import httpx
 
 from inferscale.backends.base import Json
-from inferscale.core.errors import EngineError, EngineUnavailableError
+from inferscale.core.errors import (
+    ContextLengthExceededError,
+    EngineError,
+    EngineRejectedError,
+    EngineUnavailableError,
+)
 
 CHAT_PATH = "/v1/chat/completions"
 
@@ -26,9 +31,16 @@ def _engine_message(resp: httpx.Response) -> str:
 def _raise_for_status(resp: httpx.Response) -> None:
     if resp.status_code == 200:
         return
-    msg = f"engine returned {resp.status_code}: {_engine_message(resp)}"
+    detail = _engine_message(resp)
+    msg = f"engine returned {resp.status_code}: {detail}"
     if resp.status_code == 503:  # llama-server: model still loading
         raise EngineUnavailableError(msg)
+    if 400 <= resp.status_code < 500:
+        # The request itself was refused (bad input, prompt too long): report a client
+        # error rather than blaming the engine.
+        if "context size" in detail or "context length" in detail:
+            raise ContextLengthExceededError(detail)
+        raise EngineRejectedError(msg)
     raise EngineError(msg)
 
 

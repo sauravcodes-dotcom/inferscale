@@ -1,4 +1,4 @@
-.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev check-data-text freeze-prompt eval-test preflight
+.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev check-data-text freeze-prompt eval-test preflight bfcl-setup engine-bfcl serve-bfcl
 
 HOST ?= 127.0.0.1
 PORT ?= 8000
@@ -7,12 +7,12 @@ setup:
 	uv sync
 
 lint:
-	uv run ruff check src tests evals scripts bench
-	uv run ruff format --check src tests evals scripts bench
+	uv run ruff check src tests evals scripts bench tools/bfcl
+	uv run ruff format --check src tests evals scripts bench tools/bfcl
 
 format:
-	uv run ruff check --fix src tests evals scripts bench
-	uv run ruff format src tests evals scripts bench
+	uv run ruff check --fix src tests evals scripts bench tools/bfcl
+	uv run ruff format src tests evals scripts bench tools/bfcl
 
 typecheck:
 	uv run mypy src evals scripts bench
@@ -65,3 +65,14 @@ preflight:
 # Final held-out test run (needs: fresh restart, AC power, browsers closed). Stops both servers.
 eval-test:
 	./scripts/eval_test.sh
+
+# --- BFCL (isolated environment, pinned and hash-locked) ---
+bfcl-setup:
+	uv venv tools/bfcl/.venv --python 3.12 --allow-existing -q
+	VIRTUAL_ENV=tools/bfcl/.venv uv pip sync tools/bfcl/requirements.lock --require-hashes
+
+engine-bfcl:
+	ENGINE_PROFILE=bfcl ./scripts/run_engine.sh
+
+serve-bfcl:
+	INFERSCALE_CONFIG_FILE=configs/serving/mac-llamacpp-bfcl.yaml $(MAKE) serve
