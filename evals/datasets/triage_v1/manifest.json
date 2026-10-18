@@ -1,0 +1,94 @@
+{
+  "counts": {
+    "dev": {
+      "ambiguous": 9,
+      "category": {
+        "auth": 7,
+        "config": 8,
+        "data": 8,
+        "dependency": 8,
+        "deploy_regression": 8,
+        "network": 8,
+        "resource_exhaustion": 8,
+        "unknown": 5
+      },
+      "component": {
+        "api-gateway": 4,
+        "auth-service": 8,
+        "cache": 2,
+        "cdn": 1,
+        "ci-cd": 4,
+        "database": 6,
+        "dns": 4,
+        "message-queue": 9,
+        "payments": 12,
+        "storage": 7,
+        "unknown": 3
+      },
+      "n": 60,
+      "review_status": {
+        "draft": 60
+      },
+      "severity": {
+        "SEV1": 9,
+        "SEV2": 15,
+        "SEV3": 23,
+        "SEV4": 13
+      }
+    },
+    "test": {
+      "ambiguous": 21,
+      "category": {
+        "auth": 32,
+        "config": 31,
+        "data": 31,
+        "dependency": 31,
+        "deploy_regression": 32,
+        "network": 31,
+        "resource_exhaustion": 32,
+        "unknown": 20
+      },
+      "component": {
+        "api-gateway": 33,
+        "auth-service": 22,
+        "cache": 13,
+        "cdn": 21,
+        "ci-cd": 16,
+        "database": 21,
+        "dns": 14,
+        "kubernetes": 10,
+        "message-queue": 11,
+        "payments": 36,
+        "storage": 30,
+        "unknown": 13
+      },
+      "n": 240,
+      "review_status": {
+        "draft": 240
+      },
+      "severity": {
+        "SEV1": 37,
+        "SEV2": 76,
+        "SEV3": 79,
+        "SEV4": 48
+      }
+    }
+  },
+  "dataset": "triage_v1",
+  "files": {
+    "dev.jsonl": {
+      "bytes": 90991,
+      "sha256": "706f04ef19a71c9969991f6a5e54a4335c15ffbc33ffea081db1b34c59419baa"
+    },
+    "schema.json": {
+      "bytes": 990,
+      "sha256": "40d0a53492c6c5bca6bcf030fd14a3aeb3dce2620203302fb8fc6f395f6c883a"
+    },
+    "test.jsonl": {
+      "bytes": 361914,
+      "sha256": "69edcad218e59033403088bce3076d713c051e8b7ed8c78f26cfcff754fba8be"
+    }
+  },
+  "generator": "draft_triage_v1/1.0",
+  "split_seed": 20261018
+}

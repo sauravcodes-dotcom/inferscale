@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -19,14 +20,38 @@ class ChatMessage(_Strict):
     content: str
 
 
+MAX_SCHEMA_BYTES = 16_384
+
+
+class JsonSchemaSpec(_Strict):
+    """OpenAI json_schema response format; passed through to the engine as-is."""
+
+    name: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    description: str | None = None
+    strict: bool | None = None
+    schema_: dict[str, Any] = Field(alias="schema")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    @model_validator(mode="after")
+    def _schema_shape(self) -> JsonSchemaSpec:
+        if self.schema_.get("type") != "object":
+            raise ValueError("json_schema.schema must have type 'object'")
+        if len(json.dumps(self.schema_)) > MAX_SCHEMA_BYTES:
+            raise ValueError(f"json_schema.schema larger than {MAX_SCHEMA_BYTES} bytes")
+        return self
+
+
 class ResponseFormat(_Strict):
     type: Literal["text", "json_object", "json_schema"]
-    json_schema: dict[str, Any] | None = None
+    json_schema: JsonSchemaSpec | None = None
 
     @model_validator(mode="after")
     def _schema_present(self) -> ResponseFormat:
-        if self.type == "json_schema" and not self.json_schema:
+        if self.type == "json_schema" and self.json_schema is None:
             raise ValueError("response_format.json_schema is required when type is json_schema")
+        if self.type != "json_schema" and self.json_schema is not None:
+            raise ValueError("response_format.json_schema is only allowed when type is json_schema")
         return self
 
 
@@ -62,7 +87,9 @@ class ChatCompletionRequest(_Strict):
             )
 
     def to_engine_payload(self, limits: LimitsConfig) -> dict[str, Any]:
-        payload = self.model_dump(exclude_none=True, exclude={"model", "stream", "stream_options"})
+        payload = self.model_dump(
+            exclude_none=True, by_alias=True, exclude={"model", "stream", "stream_options"}
+        )
         payload.setdefault("max_tokens", limits.default_max_tokens)
         if self.stream:
             # Always ask the engine for usage so tokens get recorded.

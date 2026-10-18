@@ -88,3 +88,35 @@ def test_engine_payload() -> None:
     streamed = parse(stream=True).to_engine_payload(limits)
     assert streamed["stream_options"] == {"include_usage": True}
     assert "stream" not in streamed
+
+
+JS = {
+    "name": "triage_v1",
+    "strict": True,
+    "schema": {"type": "object", "properties": {"a": {"type": "string"}}},
+}
+
+
+def test_json_schema_passthrough() -> None:
+    req = parse(response_format={"type": "json_schema", "json_schema": JS})
+    payload = req.to_engine_payload(LimitsConfig())
+    assert payload["response_format"] == {"type": "json_schema", "json_schema": JS}
+
+
+@pytest.mark.parametrize(
+    "rf",
+    [
+        {"type": "json_schema", "json_schema": {**JS, "schema": {"type": "array"}}},
+        {"type": "json_schema", "json_schema": {"name": "x"}},
+        {"type": "json_schema", "json_schema": {**JS, "name": "bad name!"}},
+        {"type": "json_schema", "json_schema": {**JS, "extra": 1}},
+        {"type": "text", "json_schema": JS},
+        {
+            "type": "json_schema",
+            "json_schema": {**JS, "schema": {"type": "object", "x": "y" * 20000}},
+        },
+    ],
+)
+def test_json_schema_rejections(rf: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        parse(response_format=rf)
