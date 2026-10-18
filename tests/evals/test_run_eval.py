@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -10,7 +9,7 @@ from typing import Any
 import httpx
 import pytest
 
-from evals import run_eval
+from evals import freeze, run_eval
 from evals.prompts import pag_v1, pag_v1_p2
 from inferscale.backends.fake import FakeBackend
 from tests.conftest import AppFactory
@@ -72,7 +71,8 @@ async def test_dev_run_writes_raw_and_summary(
     backend = FakeBackend(tokens=(json.dumps(CANNED),))
     app, _ = make_app(backend, limits=LIMITS)
     out, raw = await run_eval.run(
-        args(data, tmp_path / "res", "--split", "dev"), transport=httpx.ASGITransport(app=app)
+        args(data, tmp_path / "res", "--split", "dev", "--prompt-version", "pag_v1.p2"),
+        transport=httpx.ASGITransport(app=app),
     )
     rows = [json.loads(x) for x in raw.read_text().splitlines()]
     assert [r["incident_id"] for r in rows] == data[2]
@@ -141,54 +141,88 @@ async def test_invalid_outputs_are_classified(
     assert json.loads(out2.read_text())["quality"]["invalid_breakdown"]["http_error"] == 1
 
 
-async def test_test_split_guard(
+async def _dev_run(data: Any, res: Path, transport: Any, *extra: str) -> Path:
+    out, _ = await run_eval.run(args(data, res, "--split", "dev", *extra), transport=transport)
+    return out
+
+
+async def test_freeze_guard(
     make_app: AppFactory, data: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     res = tmp_path / "res"
-    app, _ = make_app(FakeBackend(tokens=(json.dumps(CANNED),)), limits=LIMITS)
-    transport = httpx.ASGITransport(app=app)
-    with pytest.raises(SystemExit, match="needs --i-am-running-final-test"):
-        await run_eval.run(args(data, res, "--split", "test"), transport=transport)
-    with pytest.raises(SystemExit, match="no full dev run"):
-        await run_eval.run(
-            args(data, res, "--split", "test", "--i-am-running-final-test"), transport=transport
-        )
-    await run_eval.run(
-        args(data, res, "--split", "dev", "--limit", "1"), transport=transport
-    )  # smoke does not count
-    with pytest.raises(SystemExit, match="no full dev run"):
-        await run_eval.run(
-            args(data, res, "--split", "test", "--i-am-running-final-test"), transport=transport
-        )
-    await run_eval.run(args(data, res, "--split", "dev"), transport=transport)
-    out, _ = await run_eval.run(
-        args(data, res, "--split", "test", "--i-am-running-final-test"), transport=transport
-    )
-    assert json.loads(out.read_text())["label"] == "test (final)"
-    monkeypatch.setattr(pag_v1_p2, "prompt_sha256", lambda: "0" * 64)
-    with pytest.raises(SystemExit, match="is not the prompt of the most recent full dev run"):
-        await run_eval.run(
-            args(data, res, "--split", "test", "--i-am-running-final-test"), transport=transport
-        )
-
-
-async def test_guard_accepts_only_latest_dev_prompt(
-    make_app: AppFactory, data: Any, tmp_path: Path
-) -> None:
-    res = tmp_path / "res"
+    frozen = tmp_path / "frozen.yaml"
     app, _ = make_app(FakeBackend(tokens=(json.dumps(CANNED),)), limits=LIMITS)
     transport = httpx.ASGITransport(app=app)
     p1, p2 = ("--prompt-version", "pag_v1.p1"), ("--prompt-version", "pag_v1.p2")
-    final = ("--split", "test", "--i-am-running-final-test")
-    await run_eval.run(args(data, res, "--split", "dev", *p1), transport=transport)
-    with pytest.raises(SystemExit, match=r"pag_v1.p2 .* most recent full dev run \(pag_v1.p1"):
-        await run_eval.run(args(data, res, *final, *p2), transport=transport)
-    await asyncio.sleep(1.1)  # result files are named by second
-    await run_eval.run(args(data, res, "--split", "dev", *p2), transport=transport)
-    with pytest.raises(SystemExit, match=r"pag_v1\.p1"):
-        await run_eval.run(args(data, res, *final, *p1), transport=transport)
-    out, _ = await run_eval.run(args(data, res, *final, *p2), transport=transport)
-    assert json.loads(out.read_text())["fingerprint"]["prompt"]["prompt_version"] == "pag_v1.p2"
+    final = ("--split", "test", "--i-am-running-final-test", "--frozen-file", str(frozen))
+
+    async def test_run(*extra: str) -> Path:
+        out, _ = await run_eval.run(args(data, res, *final, *extra), transport=transport)
+        return out
+
+    with pytest.raises(SystemExit, match="needs --i-am-running-final-test"):
+        await run_eval.run(args(data, res, "--split", "test", *p1), transport=transport)
+    with pytest.raises(SystemExit, match="no prompt is frozen"):
+        await test_run(*p1)
+
+    smoke = await _dev_run(data, res, transport, *p1, "--limit", "2")
+    freeze.write_frozen("pag_v1.p1", smoke, "t", path=frozen)
+    with pytest.raises(SystemExit, match="not a full dev run"):
+        await test_run(*p1)
+
+    full_p1 = await _dev_run(data, res, transport, *p1)
+    freeze.write_frozen("pag_v1.p1", full_p1, "t", path=frozen)
+    out = await test_run(*p1)  # accepted
+    assert json.loads(out.read_text())["label"] == "test (final)"
+    with pytest.raises(SystemExit, match=r"pag_v1\.p2 is not the frozen prompt \(pag_v1\.p1\)"):
+        await test_run(*p2)
+
+    # partial dev result (n smaller than the full dev partition)
+    s = json.loads(full_p1.read_text())
+    s["config"]["n"] = 2
+    partial = full_p1.with_name("partial-dev-x.json")
+    partial.write_text(json.dumps(s))
+    freeze.write_frozen("pag_v1.p1", partial, "t", path=frozen)
+    with pytest.raises(SystemExit, match="covers 2 items, full dev is 3"):
+        await test_run(*p1)
+
+    # referenced dev result missing
+    freeze.write_frozen("pag_v1.p1", tmp_path / "gone.json", "t", path=frozen)
+    with pytest.raises(SystemExit, match="does not exist"):
+        await test_run(*p1)
+
+    # dev result produced with another prompt
+    full_p2 = await _dev_run(data, res, transport, *p2)
+    freeze.write_frozen("pag_v1.p1", full_p2, "t", path=frozen)
+    with pytest.raises(SystemExit, match="different prompt sha"):
+        await test_run(*p1)
+
+    # sha drift: the prompt file changed after freezing
+    freeze.write_frozen("pag_v1.p1", full_p1, "t", path=frozen)
+    monkeypatch.setattr(pag_v1, "prompt_sha256", lambda: "0" * 64)
+    with pytest.raises(SystemExit, match="changed since it was frozen"):
+        await test_run(*p1)
+
+
+def test_default_prompt_is_the_frozen_one() -> None:
+    frozen = freeze.load_frozen()
+    assert frozen is not None
+    a = run_eval.parse_args(["--split", "dev"])
+    assert a.prompt_version == frozen["prompt_version"]
+
+
+def test_repo_freeze_is_consistent() -> None:
+    frozen = freeze.load_frozen()
+    assert frozen is not None and frozen["prompt_version"] == "pag_v1.p1"
+    assert frozen["prompt_sha256"] == pag_v1.prompt_sha256()
+    assert (
+        freeze.dev_result_problem(
+            frozen["dev_result_file"], frozen["prompt_sha256"], freeze.dev_size()
+        )
+        is None
+    )
+    assert freeze.final_test_refusal("pag_v1.p1", frozen) is None
+    assert "not the frozen prompt" in (freeze.final_test_refusal("pag_v1.p2", frozen) or "")
 
 
 def test_prompt_versions() -> None:

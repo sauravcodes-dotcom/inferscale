@@ -58,7 +58,11 @@ make eval-dev          # full dev split (103); --prompt-version pag_v1.p1|pag_v1
 ```
 
 The test split (495) is held out. `run_eval` refuses it unless you pass
-`--i-am-running-final-test`, and only with the prompt of the most recent full dev run.
+`--i-am-running-final-test` and the prompt is the one frozen in `configs/eval/frozen.yaml`
+(with an unchanged sha256 and a referenced full dev result). To freeze another prompt, run
+`make freeze-prompt PROMPT=pag_v1.p2 REASON="..."`. `make eval-test` runs the clean-environment
+preflight (AC power, swap <= 64 MB, no Chrome/Safari/Ollama, ports free), starts the engine and
+gateway, runs the test split with the frozen prompt, and stops both.
 `make check-data-text` (`scripts/check_no_dataset_text.py`) fails if any tracked file contains PAG text.
 
 ## Data and licence

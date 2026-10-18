@@ -6,8 +6,9 @@ Outputs:
 - summary JSON with metrics, environment fingerprint and the hash of the ID list (committed):
   results/eval/<model_version>/<ts>-<split>-<prompt>-<rf>.json  (smoke runs: results/eval/smoke/)
 
-The test split is refused unless --i-am-running-final-test is passed AND the prompt (prompt
-file + output schema, by sha256) is the prompt of the most recent full dev run.
+The test split is refused unless --i-am-running-final-test is passed AND the requested prompt
+is the one frozen in configs/eval/frozen.yaml with an unchanged sha256 and a referenced full dev
+result (see evals/freeze.py). The default prompt is the frozen one.
 
 Usage:
   uv run python -m evals.run_eval --split dev [--limit 10]
@@ -34,6 +35,7 @@ from bench.harness import RequestRecord, Target, stream_one
 from evals.dataset import ROOT, sha256_file
 from evals.datasets.pag import SOURCE, load_records
 from evals.fingerprint import engine_props, git_state, host_state
+from evals.freeze import FROZEN_FILE, final_test_refusal, load_frozen
 from evals.prompts import DEFAULT_PAG_PROMPT, PAG_PROMPTS, get_prompt
 from evals.scorers import classify_output, load_lexicon, score_pag_item, summarize_pag
 from inferscale.registry import load_registry
@@ -52,35 +54,20 @@ def partition_ids(split_file: Path, partition: str) -> list[str]:
     return ids
 
 
-def last_dev_prompt(model_version: str, results: Path = RESULTS) -> dict[str, str] | None:
-    runs = sorted((results / model_version).glob("*-dev-*.json"))
-    for path in reversed(runs):
-        s = json.loads(path.read_text())
-        if s.get("run_kind") == "full":
-            fp: dict[str, str] = s["fingerprint"]["prompt"]
-            return fp
-    return None
-
-
-def check_test_allowed(
-    args: argparse.Namespace, model_version: str, results: Path = RESULTS
-) -> str | None:
-    """Return a refusal reason, or None if a test-split run may proceed."""
+def check_test_allowed(args: argparse.Namespace) -> str | None:
+    """Return a refusal reason, or None if this run may proceed (see evals/freeze.py)."""
     if args.split != "test":
         return None
     if not args.i_am_running_final_test:
         return "the test split needs --i-am-running-final-test"
-    last = last_dev_prompt(model_version, results)
-    if last is None:
-        return "no full dev run recorded for this model; run --split dev first"
-    prompt = get_prompt(args.prompt_version)
-    now = prompt.prompt_sha256()
-    if last["prompt_sha256"] != now:
-        return (
-            f"prompt {prompt.PROMPT_VERSION} ({now[:12]}) is not the prompt of the most recent "
-            f"full dev run ({last['prompt_version']}, {last['prompt_sha256'][:12]})"
-        )
-    return None
+    return final_test_refusal(
+        args.prompt_version, load_frozen(Path(args.frozen_file)), Path(args.split_file)
+    )
+
+
+def default_prompt_version() -> str:
+    frozen = load_frozen()
+    return str(frozen["prompt_version"]) if frozen else DEFAULT_PAG_PROMPT
 
 
 async def run(
@@ -89,7 +76,7 @@ async def run(
     registry = load_registry(REGISTRY)
     model_version = args.model_version or registry.active
     entry = registry.models.get(model_version)
-    refusal = check_test_allowed(args, model_version, Path(args.results_dir))
+    refusal = check_test_allowed(args)
     if refusal:
         raise SystemExit(f"refusing to run: {refusal}")
     prompt = get_prompt(args.prompt_version)
@@ -265,7 +252,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="http://127.0.0.1:8081",
         help="for the /props fingerprint ('' to skip)",
     )
-    ap.add_argument("--prompt-version", choices=sorted(PAG_PROMPTS), default=DEFAULT_PAG_PROMPT)
+    ap.add_argument(
+        "--prompt-version",
+        choices=sorted(PAG_PROMPTS),
+        default=None,
+        help="default: the frozen prompt",
+    )
+    ap.add_argument("--frozen-file", default=str(FROZEN_FILE))
     ap.add_argument("--response-format", choices=("json_schema", "none"), default="json_schema")
     ap.add_argument("--limit", type=int, default=None, help="first N items; marks the run as smoke")
     ap.add_argument("--concurrency", type=int, default=1)
@@ -276,7 +269,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--data-file", default=None, help="override the PAG file (tests)")
     ap.add_argument("--results-dir", default=str(RESULTS))
     ap.add_argument("--quiet", action="store_true")
-    return ap.parse_args(argv)
+    args = ap.parse_args(argv)
+    if args.prompt_version is None:
+        args.prompt_version = default_prompt_version()
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:

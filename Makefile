@@ -1,4 +1,4 @@
-.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev check-data-text
+.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev check-data-text freeze-prompt eval-test preflight
 
 HOST ?= 127.0.0.1
 PORT ?= 8000
@@ -52,3 +52,16 @@ eval-dev:
 
 check-data-text:
 	uv run python scripts/check_no_dataset_text.py
+
+# Freeze a prompt for the held-out test split, e.g.
+#   make freeze-prompt PROMPT=pag_v1.p2 REASON="..."
+freeze-prompt:
+	@test -n "$(PROMPT)" || (echo "usage: make freeze-prompt PROMPT=pag_v1.p1 REASON='...'" && exit 1)
+	uv run python -m evals.freeze --prompt $(PROMPT) --reason "$(or $(REASON),frozen via make freeze-prompt)"
+
+preflight:
+	uv run python scripts/preflight.py
+
+# Final held-out test run (needs: fresh restart, AC power, browsers closed). Stops both servers.
+eval-test:
+	./scripts/eval_test.sh

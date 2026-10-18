@@ -1,0 +1,6 @@
+# Prompt frozen for the held-out test split. Written by `make freeze-prompt`; do not edit by hand.
+prompt_version: pag_v1.p1
+prompt_sha256: dc587a81cdea67c044e385721c70defd8465421a314c31d1f4787c398faf383f
+dev_result_file: results/eval/qwen3-8b-q4km-v1/20261018T010452Z-dev-json_schema.json
+frozen_at: '2026-10-18T01:43:35+00:00'
+reason: 'p2 not better on dev: preventive F1 significantly lower, other deltas n.s.'
