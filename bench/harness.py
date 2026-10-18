@@ -38,6 +38,8 @@ class RequestRecord:
     error: str | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    finish_reason: str | None = None
+    content: str | None = None  # only filled when capture_content=True
 
     @property
     def ok(self) -> bool:
@@ -78,9 +80,14 @@ def _now(t0: float) -> float:
 
 
 async def stream_one(
-    client: httpx.AsyncClient, body: dict[str, Any], rec: RequestRecord, t0: float
+    client: httpx.AsyncClient,
+    body: dict[str, Any],
+    rec: RequestRecord,
+    t0: float,
+    capture_content: bool = False,
 ) -> RequestRecord:
     rec.send_t = _now(t0)
+    parts: list[str] = []
     try:
         async with client.stream("POST", "/v1/chat/completions", json=body) as resp:
             rec.status = resp.status_code
@@ -107,19 +114,28 @@ async def stream_one(
                     )
                     break
                 for choice in chunk.get("choices") or []:
-                    if (choice.get("delta") or {}).get("content"):
+                    text = (choice.get("delta") or {}).get("content")
+                    if text:
                         t = _now(t0)
                         if rec.first_token_t is None:
                             rec.first_token_t = t
                         rec.delta_ts.append(t)
+                        if capture_content:
+                            parts.append(text)
+                    if choice.get("finish_reason"):
+                        rec.finish_reason = choice["finish_reason"]
                 usage = chunk.get("usage")
                 if isinstance(usage, dict):
                     rec.prompt_tokens = usage.get("prompt_tokens")
                     rec.completion_tokens = usage.get("completion_tokens")
+    except httpx.TimeoutException:
+        rec.error = "timeout"
     except httpx.HTTPError as e:
         rec.error = type(e).__name__
     finally:
         rec.end_t = _now(t0)
+        if capture_content:
+            rec.content = "".join(parts)
     return rec
 
 

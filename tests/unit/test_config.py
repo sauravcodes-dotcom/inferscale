@@ -16,7 +16,7 @@ def test_loads_serving_profile() -> None:
     assert s.engine_url == "http://127.0.0.1:8081"
     assert s.admission.max_inflight == 2
     assert s.admission.max_queue == 8
-    assert s.limits.max_tokens_cap == 512
+    assert s.limits.max_tokens_cap == 1024
     assert s.drain_timeout_s == 30.0
     assert s.log_content is False
 

@@ -12,3 +12,5 @@ logs/
 /results/bench/bench_smoke/
 /reports/bench_smoke.md
 /data/
+/results/eval/raw/
+/results/eval/smoke/

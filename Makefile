@@ -1,4 +1,4 @@
-.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke
+.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev
 
 HOST ?= 127.0.0.1
 PORT ?= 8000
@@ -34,3 +34,18 @@ bench-e1:
 
 bench-smoke:
 	uv run python -m bench.run_experiment configs/experiments/bench_smoke.yaml
+
+fetch-data:
+	uv run python scripts/fetch_pag.py
+
+split:
+	uv run python scripts/make_pag_split.py
+
+baselines:
+	uv run python -m evals.baselines
+
+eval-smoke:
+	uv run python -m evals.run_eval --split dev --limit 10
+
+eval-dev:
+	uv run python -m evals.run_eval --split dev
