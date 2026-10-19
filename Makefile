@@ -1,4 +1,4 @@
-.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev check-data-text freeze-prompt eval-test preflight bfcl-setup engine-bfcl serve-bfcl bfcl-test
+.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev check-data-text freeze-prompt eval-test preflight bfcl-setup engine-bfcl serve-bfcl bfcl-test reliability
 
 HOST ?= 127.0.0.1
 PORT ?= 8000
@@ -80,3 +80,7 @@ serve-bfcl:
 # One-time BFCL held-out run with the frozen config (needs restart, AC power, no browsers).
 bfcl-test:
 	./scripts/bfcl_test.sh
+
+# Reliability validation against the real engine (starts/stops its own processes).
+reliability:
+	uv run python -m bench.reliability

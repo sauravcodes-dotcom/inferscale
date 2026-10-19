@@ -30,6 +30,9 @@ if TYPE_CHECKING:
 
 router = APIRouter()
 
+# Outcomes where the gateway stopped before the engine finished; the engine may still be busy.
+EARLY_EXIT = frozenset({"timeout", "client_disconnect"})
+
 
 def _gateway(request: Request) -> Gateway:
     gw: Gateway = request.app.state.gateway
@@ -190,7 +193,7 @@ async def _complete(gw: Gateway, rec: RequestRecord, payload: Json, deadline: De
         rec.outcome, rec.status = "client_disconnect", 499
         raise
     finally:
-        gw.admission.release()
+        gw.release_permit(early=rec.outcome in EARLY_EXIT)
         rec.finish()
     return JSONResponse({**result, "model": gw.model_version})
 
@@ -219,7 +222,7 @@ async def _stream(
         try:
             await events.aclose()
         finally:
-            gw.admission.release()
+            gw.release_permit(early=rec.outcome in EARLY_EXIT)
             rec.finish()
 
     # Wait for the first chunk before committing to a 200 so early failures

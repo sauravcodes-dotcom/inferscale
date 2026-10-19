@@ -122,10 +122,10 @@ class Procs:
 
 
 async def wait_until(
-    pred: Callable[[], Awaitable[bool]], timeout: float, interval: float = 0.25
+    pred: Callable[[], Awaitable[bool]], within_s: float, interval: float = 0.25
 ) -> float | None:
     t0 = time.monotonic()
-    while time.monotonic() - t0 < timeout:
+    while time.monotonic() - t0 < within_s:
         try:
             if await pred():
                 return time.monotonic() - t0
@@ -137,7 +137,7 @@ async def wait_until(
 
 async def engine_healthy() -> bool:
     async with httpx.AsyncClient(timeout=2) as c:
-        return (await c.get(f"{ENGINE}/health")).json().get("status") == "ok"
+        return bool((await c.get(f"{ENGINE}/health")).json().get("status") == "ok")
 
 
 async def ready_status() -> int:
@@ -294,7 +294,7 @@ async def overload(procs: Procs) -> dict[str, Any]:
 
 
 async def deadline(procs: Procs) -> dict[str, Any]:
-    """First-token deadline 2 s vs a ~6.5k-token prompt (>20 s of prefill): 504 and slot released."""
+    """First-token deadline 2 s vs a ~6.5k-token prompt (>20 s prefill): 504, slot released."""
     await up(
         procs,
         {
@@ -312,14 +312,40 @@ async def deadline(procs: Procs) -> dict[str, Any]:
         t0 = time.perf_counter()
         r = await c.post("/v1/chat/completions", json=body)
         elapsed = time.perf_counter() - t0
-    freed = await wait_until(lambda: _engine_idle(), 90, 0.2)
+    await asyncio.sleep(0.5)
+    g = prom(await metrics(GW), "inferscale_held_permits", "inferscale_inflight")
+    e = prom(await metrics(ENGINE), "llamacpp:requests_processing")
+    held_after_504 = g.get("inferscale_held_permits")
+    # Track engine occupancy vs gateway permits until the engine finishes the abandoned prefill.
+    undercount = 0
+    freed: float | None = None
+    t_idle = time.monotonic()
+    while time.monotonic() - t_idle < 90:
+        g = prom(await metrics(GW), "inferscale_inflight")
+        e = prom(await metrics(ENGINE), "llamacpp:requests_processing")
+        busy, inflight = (
+            e.get("llamacpp:requests_processing") or 0,
+            g.get("inferscale_inflight") or 0,
+        )
+        if busy > inflight:
+            undercount += 1
+        if busy == 0:
+            freed = time.monotonic() - t_idle
+            break
+        await asyncio.sleep(0.2)
+    released = await wait_until(lambda: _gateway_inflight_zero(), 5, 0.1)
+    m = await metrics(GW)
+    hold = prom(m, "inferscale_permit_hold_seconds_sum", "inferscale_permit_hold_seconds_count")
     procs.stop_gateway()
     code = r.json().get("error", {}).get("code") if r.status_code != 200 else None
     return {
         "status": r.status_code,
         "error_code": code,
         "elapsed_s": round(elapsed, 2),
-        "engine_idle_after_s": None if freed is None else round(freed, 2),
+        "observation_engine_busy_after_504_s": None if freed is None else round(freed + 0.5, 1),
+        "held_permits_after_504": held_after_504,
+        "permit_hold_s": hold.get("inferscale_permit_hold_seconds_sum"),
+        "samples_engine_busier_than_gateway": undercount,
         "checks": [
             check(
                 "504 deadline_exceeded",
@@ -328,10 +354,27 @@ async def deadline(procs: Procs) -> dict[str, Any]:
             ),
             check("returned close to the 2 s deadline (< 4 s)", elapsed < 4, round(elapsed, 2)),
             check(
-                "engine slot released within 10 s (upstream cancelled)", freed is not None and freed < 10, freed
+                "gateway held the permit while the engine kept prefilling",
+                held_after_504 == 1,
+                held_after_504,
+            ),
+            check(
+                "gateway never counted fewer requests than the engine was running",
+                undercount == 0,
+                undercount,
+            ),
+            check(
+                "permit released within 5 s of the engine slot freeing",
+                released is not None,
+                released,
             ),
         ],
     }
+
+
+async def _gateway_inflight_zero() -> bool:
+    v = prom(await metrics(GW), "inferscale_inflight").get("inferscale_inflight")
+    return v is not None and v == 0
 
 
 async def _engine_idle() -> bool:
@@ -487,7 +530,7 @@ async def drain(procs: Procs) -> dict[str, Any]:
             r = await c.post("/v1/chat/completions", json={"messages": SHORT, "max_tokens": 8})
             new_req = (r.status_code, r.json().get("error", {}).get("code"))
         except httpx.HTTPError as e:
-            ready, new_req = -1, (None, repr(e))
+            ready, new_req = -1, (-1, repr(e))
         done = await asyncio.gather(*inflight)
     exit_s = None
     if procs.gateway is not None:

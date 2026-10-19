@@ -41,6 +41,9 @@ class FakeBackend:
         # When set and the request carries tools, respond with these calls instead of text.
         # Each item: {"name": ..., "arguments": {...}}.
         self.tool_calls = tool_calls
+        # What busy_slots() reports; None = derive from active streams. Tests set it to simulate
+        # an engine that keeps working after the client left.
+        self.engine_busy: int | None = None
         self.active_streams = 0
         self.streams_closed_early = 0
         self.requests: list[Json] = []
@@ -66,6 +69,9 @@ class FakeBackend:
             await asyncio.sleep(3600)
         if self.first_token_delay_s:
             await asyncio.sleep(self.first_token_delay_s)
+
+    async def busy_slots(self) -> int | None:
+        return self.engine_busy if self.engine_busy is not None else self.active_streams
 
     async def health(self) -> bool:
         return self.healthy

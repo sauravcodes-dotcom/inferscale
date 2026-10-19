@@ -27,6 +27,13 @@ class AdmissionConfig(_Section):
     max_queue: int = Field(default=8, ge=0)
     queue_timeout_s: float = Field(default=10.0, gt=0)
     retry_after_s: int = Field(default=1, ge=0)
+    # llama.cpp keeps processing a prompt after the client is gone (it only checks for
+    # cancellation after prefill), so a request that ends early may still occupy an engine
+    # slot. When enabled, its admission permit is held until the engine reports a free slot
+    # (polled via /slots), for at most hold_max_s.
+    hold_permits_until_engine_idle: bool = True
+    hold_max_s: float = Field(default=120.0, gt=0)
+    hold_poll_s: float = Field(default=0.25, gt=0)
 
 
 class DeadlineConfig(_Section):

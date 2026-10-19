@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import signal
+import time
 import uuid
+from collections import deque
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -46,10 +48,50 @@ class Gateway:
         ).set(1)
         self.log = get_logger("inferscale.request")
         self.drain_task: asyncio.Task[bool] | None = None
+        self._held: deque[float] = deque()
+        self._reaper: asyncio.Task[None] | None = None
 
     @property
     def model_version(self) -> str:
         return self.registry.active
+
+    def release_permit(self, early: bool) -> None:
+        """Release an admission permit. After an early exit (deadline, client disconnect) the
+        engine may still be working on the request, so the permit is held until it is not."""
+        a = self.settings.admission
+        busy_slots = getattr(self.backend, "busy_slots", None)
+        if not early or not a.hold_permits_until_engine_idle or busy_slots is None:
+            self.admission.release()
+            return
+        self._held.append(time.monotonic())
+        self.metrics.held_permits.set(len(self._held))
+        if self._reaper is None or self._reaper.done():
+            self._reaper = asyncio.get_running_loop().create_task(self._reap())
+
+    async def _reap(self) -> None:
+        a = self.settings.admission
+        while self._held:
+            try:
+                busy = await self.backend.busy_slots()  # type: ignore[attr-defined]
+            except Exception:
+                busy = None
+            now = time.monotonic()
+            # A held permit can go once the engine runs fewer requests than permits outstanding.
+            while self._held and (
+                busy is None or busy < self.admission.inflight or now - self._held[0] > a.hold_max_s
+            ):
+                started = self._held.popleft()
+                if (
+                    busy is not None
+                    and now - started > a.hold_max_s
+                    and busy >= self.admission.inflight
+                ):
+                    self.metrics.permit_hold_timeouts.inc()
+                self.metrics.permit_hold_seconds.observe(now - started)
+                self.admission.release()
+            self.metrics.held_permits.set(len(self._held))
+            if self._held:
+                await asyncio.sleep(a.hold_poll_s)
 
     async def check_engine(self) -> bool:
         ok = await self.backend.health()

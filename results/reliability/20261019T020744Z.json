@@ -1,0 +1,62 @@
+{
+ "all_pass": true,
+ "fingerprint": {
+  "git": {
+   "dirty": true,
+   "sha": "435f2145a61b5004156f054177cc3032092c36d8"
+  },
+  "host": {
+   "battery": "-InternalBattery-0 (id=25034851)\t89%; charging; 0:39 remaining present: true",
+   "chip": "Apple M1 Pro",
+   "macos_version": "26.5",
+   "memory_gb": 16,
+   "os": "Darwin",
+   "power_source": "AC",
+   "python": "3.12.12"
+  }
+ },
+ "scenarios": {
+  "deadline": {
+   "checks": [
+    {
+     "check": "504 deadline_exceeded",
+     "detail": [
+      504,
+      "deadline_exceeded"
+     ],
+     "pass": true
+    },
+    {
+     "check": "returned close to the 2 s deadline (< 4 s)",
+     "detail": 2.01,
+     "pass": true
+    },
+    {
+     "check": "gateway held the permit while the engine kept prefilling",
+     "detail": 1.0,
+     "pass": true
+    },
+    {
+     "check": "gateway never counted fewer requests than the engine was running",
+     "detail": 0,
+     "pass": true
+    },
+    {
+     "check": "permit released within 5 s of the engine slot freeing",
+     "detail": 0.009803208999983326,
+     "pass": true
+    }
+   ],
+   "duration_s": 37.8,
+   "elapsed_s": 2.01,
+   "error_code": "deadline_exceeded",
+   "held_permits_after_504": 1.0,
+   "observation_engine_busy_after_504_s": 30.5,
+   "pass": true,
+   "permit_hold_s": 30.451546416999918,
+   "samples_engine_busier_than_gateway": 0,
+   "status": 504
+  }
+ },
+ "started_at": "2026-10-19T02:07:44+00:00"
+}

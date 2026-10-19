@@ -290,6 +290,17 @@ class OpenAIHTTPBackend:
         except ValueError:
             return False
 
+    async def busy_slots(self) -> int | None:
+        """Engine slots currently processing (llama-server /slots), or None if unknown."""
+        try:
+            resp = await self._client.get("/slots", timeout=1.0)
+            slots = resp.json() if resp.status_code == 200 else None
+        except (httpx.HTTPError, ValueError):
+            return None
+        if not isinstance(slots, list):
+            return None
+        return sum(1 for s in slots if isinstance(s, dict) and s.get("is_processing"))
+
     async def complete(self, payload: Json) -> Json:
         if self._gateway_tools(payload):
             return await self._complete_tools(payload)

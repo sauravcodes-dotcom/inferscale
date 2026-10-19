@@ -69,6 +69,22 @@ class Metrics:
             ["to"],
             registry=r,
         )
+        self.held_permits = Gauge(
+            "inferscale_held_permits",
+            "Admission permits held after an early exit until the engine frees the slot",
+            registry=r,
+        )
+        self.permit_hold_seconds = Histogram(
+            "inferscale_permit_hold_seconds",
+            "How long early-exit permits were held before the engine slot was free",
+            buckets=LATENCY_BUCKETS,
+            registry=r,
+        )
+        self.permit_hold_timeouts = Counter(
+            "inferscale_permit_hold_timeouts",
+            "Held permits force-released after hold_max_s",
+            registry=r,
+        )
         self.engine_up = Gauge(
             "inferscale_engine_up", "1 if the engine health check passes", registry=r
         )

@@ -174,6 +174,14 @@ async def test_queue_timeout_429(make_app: AppFactory) -> None:
 # --- deadlines and engine failures -------------------------------------------
 
 
+async def wait_inflight_zero(gw: Any, within_s: float = 2.0) -> None:
+    loop = asyncio.get_running_loop()
+    end = loop.time() + within_s
+    while gw.admission.inflight and loop.time() < end:
+        await asyncio.sleep(0.01)
+    assert gw.admission.inflight == 0
+
+
 async def test_504_on_hang_stream(make_app: AppFactory) -> None:
     backend = FakeBackend(mode="hang")
     app, gw = make_app(backend, deadlines={"first_token_timeout_s": 0.1})
@@ -181,7 +189,7 @@ async def test_504_on_hang_stream(make_app: AppFactory) -> None:
         r = await c.post("/v1/chat/completions", json=chat_body(stream=True))
     assert r.status_code == 504
     assert r.json()["error"]["code"] == "deadline_exceeded"
-    assert gw.admission.inflight == 0
+    await wait_inflight_zero(gw)
     assert backend.active_streams == 0  # upstream was cancelled
 
 
@@ -190,7 +198,7 @@ async def test_504_on_hang_non_stream(make_app: AppFactory) -> None:
     async with client_for(app) as c:
         r = await c.post("/v1/chat/completions", json=chat_body())
     assert r.status_code == 504
-    assert gw.admission.inflight == 0
+    await wait_inflight_zero(gw)
     m = gw.metrics.render().decode()
     assert metric_value(m, "inferscale_requests_total", 'outcome="timeout"') == 1
 
@@ -516,3 +524,74 @@ async def test_tool_call_fallback_metric_and_log(
     assert metric_value(m, "inferscale_tool_call_fallbacks_total", 'to="engine"') == 1
     log = next(json.loads(x) for x in capsys.readouterr().out.splitlines() if '"fb-1"' in x)
     assert log["tool_call_fallback"] == "engine"
+
+
+# --- held permits after early exits ----------------------------------------------------
+
+
+async def test_permit_held_while_engine_still_busy(make_app: AppFactory) -> None:
+    backend = FakeBackend(mode="hang")
+    backend.engine_busy = 1  # the engine keeps prefilling after the client is gone
+    app, gw = make_app(
+        backend,
+        admission={"max_inflight": 1, "max_queue": 0, "hold_poll_s": 0.01},
+        deadlines={"first_token_timeout_s": 0.05},
+    )
+    async with client_for(app) as c:
+        r = await c.post("/v1/chat/completions", json=chat_body(stream=True))
+        assert r.status_code == 504
+        await asyncio.sleep(0.1)
+        assert gw.admission.inflight == 1  # permit held: engine slot still busy
+        assert metric_value(gw.metrics.render().decode(), "inferscale_held_permits") == 1
+        backend.mode = "ok"
+        shed = await c.post("/v1/chat/completions", json=chat_body())
+        assert shed.status_code == 429  # gateway does not overcommit the busy engine
+        backend.engine_busy = 0
+        await wait_inflight_zero(gw)
+        ok = await c.post("/v1/chat/completions", json=chat_body())
+        assert ok.status_code == 200
+    m = gw.metrics.render().decode()
+    assert metric_value(m, "inferscale_held_permits") == 0
+    assert metric_value(m, "inferscale_permit_hold_seconds_count") == 1
+
+
+async def test_held_permit_force_released_after_max(make_app: AppFactory) -> None:
+    backend = FakeBackend(mode="hang")
+    backend.engine_busy = 5
+    app, gw = make_app(
+        backend,
+        admission={"hold_poll_s": 0.01, "hold_max_s": 0.1},
+        deadlines={"first_token_timeout_s": 0.05},
+    )
+    async with client_for(app) as c:
+        assert (
+            await c.post("/v1/chat/completions", json=chat_body(stream=True))
+        ).status_code == 504
+    await wait_inflight_zero(gw)
+    assert metric_value(gw.metrics.render().decode(), "inferscale_permit_hold_timeouts_total") == 1
+
+
+async def test_unknown_engine_state_releases_immediately(make_app: AppFactory) -> None:
+    backend = FakeBackend(mode="hang")
+
+    async def broken() -> int | None:
+        raise RuntimeError("engine gone")
+
+    backend.busy_slots = broken  # type: ignore[method-assign]
+    app, gw = make_app(
+        backend, admission={"hold_poll_s": 5}, deadlines={"first_token_timeout_s": 0.05}
+    )
+    async with client_for(app) as c:
+        assert (
+            await c.post("/v1/chat/completions", json=chat_body(stream=True))
+        ).status_code == 504
+    await wait_inflight_zero(gw, within_s=0.5)  # no waiting for a poll interval
+
+
+async def test_normal_completion_never_holds(make_app: AppFactory) -> None:
+    backend = FakeBackend()
+    backend.engine_busy = 3
+    app, gw = make_app(backend)
+    async with client_for(app) as c:
+        assert (await c.post("/v1/chat/completions", json=chat_body())).status_code == 200
+    assert gw.admission.inflight == 0  # released synchronously
