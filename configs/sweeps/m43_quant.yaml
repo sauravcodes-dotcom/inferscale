@@ -1,0 +1,13 @@
+# Quantization: Q4_K_M vs Q8_0 serving cost (latency, decode rate, memory) on the same requests.
+# Quality is measured separately with the BFCL dev evaluation (evals/bfcl/run.py).
+# Q8_0 (~8.7 GB) is not downloaded yet; the variant is skipped until the file exists.
+name: m43_quant
+description: |
+  Q4_K_M vs Q8_0 weights on BFCL dev requests: latency, decode rate, memory
+  (Qwen3-8B, 2 slots x 8192 tokens, 1 GiB host prompt cache, gateway_validated).
+experiment: configs/experiments/bfcl_latency.yaml
+engine_profile: bfcl
+report: reports/m43_quant.md
+variants:
+  - {name: q4_k_m, engine_env: {ENGINE_MODEL: "~/models/qwen3-8b-gguf/Qwen3-8B-Q4_K_M.gguf"}, concurrency: [1, 2]}
+  - {name: q8_0, engine_env: {ENGINE_MODEL: "~/models/qwen3-8b-gguf/Qwen3-8B-Q8_0.gguf"}, concurrency: [1, 2]}

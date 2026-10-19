@@ -51,3 +51,17 @@ def pag_prompts(
         "response_format": response_format,
     }
     return prompts, prompt.response_format(response_format), fp
+
+
+def bfcl_requests(
+    partition: str = "dev", categories: list[str] | None = None
+) -> list[dict[str, Any]]:
+    """BFCL requests as the official FC handler builds them (tools/bfcl/export_requests.py)."""
+    path = ROOT / "results" / "bfcl" / "raw" / f"requests-{partition}.jsonl"
+    if not path.is_file():
+        raise SystemExit(
+            f"{path} missing; run tools/bfcl/.venv/bin/python tools/bfcl/export_requests.py "
+            f"--partition {partition}"
+        )
+    rows = [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
+    return [r for r in rows if categories is None or r["category"] in categories]

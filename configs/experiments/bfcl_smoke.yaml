@@ -1,0 +1,17 @@
+# Pipeline smoke test only: NOT a result. Allowed on a dirty environment (warnings only).
+name: bfcl_smoke
+description: 8 BFCL dev requests at concurrency 1 and 2 (smoke)
+smoke: true
+workload: {dataset: bfcl, partition: dev, n_requests: 8, max_tokens: 1024, temperature: 0.001}
+mode: closed
+concurrency: [1, 2]
+warmup: 1
+repeats: 1
+cooldown_s: 2
+max_swap_growth_mb: 32
+report: reports/bfcl_smoke.md
+preflight:
+  enforce: false
+  require_ac: true
+  max_swap_mb_start: 64
+  forbidden_processes: ["^Google Chrome( Helper.*)?$", "^Safari$", "^[Oo]llama.*"]

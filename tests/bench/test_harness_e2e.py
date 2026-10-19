@@ -108,3 +108,17 @@ async def test_open_loop_needs_rate() -> None:
         await run_load(
             Target("x", "http://127.0.0.1:1"), PROMPTS, n_requests=1, max_tokens=1, mode="open"
         )
+
+
+async def test_tool_call_requests(live_gateway: LiveFactory) -> None:
+    """Request dicts carry tools; a response with only tool-call deltas is a successful record."""
+    call = {"name": "get_weather", "arguments": '{"city": "Paris"}'}
+    url = await live_gateway(FakeBackend(tool_calls=(call,)))
+    tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {}}}]
+    prompts = [{"messages": [{"role": "user", "content": "weather?"}], "tools": tools}]
+    run = await run_load(Target("gateway", url, MODEL), prompts, n_requests=2, max_tokens=32)
+    measured = [r for r in run["records"] if r["phase"] == "measure"]
+    assert all(r["ok"] for r in measured)
+    assert all(r["finish_reason"] == "tool_calls" and r["n_tool_calls"] == 1 for r in measured)
+    # Without tools in the request the fake answers with text, so tools were forwarded.
+    assert Target("g", url).body(prompts[0], 8, 0.0)["tools"] == tools

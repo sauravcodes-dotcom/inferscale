@@ -1,0 +1,10 @@
+# Pipeline smoke test only: NOT a result. Two variants, few requests, warnings-only preflight.
+name: m43_smoke
+description: Sweep pipeline check (smoke), BFCL dev requests
+experiment: configs/experiments/bfcl_smoke.yaml
+engine_profile: bfcl
+settle_s: 2
+report: reports/m43_smoke.md
+variants:
+  - {name: cache1024, engine_env: {ENGINE_CACHE_RAM: "1024"}}
+  - {name: missing_model, engine_env: {ENGINE_MODEL: "/nonexistent.gguf"}}

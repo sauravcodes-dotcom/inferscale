@@ -1,0 +1,15 @@
+# Does the host prompt-cache cap (llama.cpp --cache-ram) explain the BFCL latency change from
+# ~1.5 s (default 8 GiB cache, swapping) to ~3.75 s (1 GiB cap)? Measures latency, prompt-token
+# reuse and memory/swap per cap. 0 disables the host cache (in-slot KV reuse still applies).
+name: m43_cache_ram
+description: |
+  Host prompt-cache size vs latency, prompt reuse and memory on BFCL dev requests
+  (Qwen3-8B Q4_K_M, 2 slots x 8192 tokens, gateway_validated).
+experiment: configs/experiments/bfcl_latency.yaml
+engine_profile: bfcl
+report: reports/m43_cache_ram.md
+variants:
+  - {name: cache0, engine_env: {ENGINE_CACHE_RAM: "0"}, concurrency: [1, 2]}
+  - {name: cache1024, engine_env: {ENGINE_CACHE_RAM: "1024"}, concurrency: [1, 2]}
+  - {name: cache4096, engine_env: {ENGINE_CACHE_RAM: "4096"}, concurrency: [1, 2]}
+  - {name: cache8192, description: llama.cpp default, engine_env: {ENGINE_CACHE_RAM: "8192"}, concurrency: [1, 2]}

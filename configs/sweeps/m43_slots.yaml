@@ -1,0 +1,14 @@
+# Slots and offered concurrency: throughput vs per-request latency. Each slot keeps 8192 tokens
+# (the largest BFCL prompt is 6,552), so total context = 8192 x slots; KV memory grows with it.
+# Concurrency above the slot count measures admission queueing, not engine parallelism.
+name: m43_slots
+description: |
+  Engine slots (1/2/4) x offered concurrency on BFCL dev requests: throughput, latency,
+  KV memory (Qwen3-8B Q4_K_M, 1 GiB host prompt cache, gateway_validated).
+experiment: configs/experiments/bfcl_latency.yaml
+engine_profile: bfcl
+report: reports/m43_slots.md
+variants:
+  - {name: slots1, engine_env: {ENGINE_PARALLEL: "1", ENGINE_CTX: "8192"}, concurrency: [1, 2]}
+  - {name: slots2, engine_env: {ENGINE_PARALLEL: "2", ENGINE_CTX: "16384"}, concurrency: [1, 2, 4]}
+  - {name: slots4, engine_env: {ENGINE_PARALLEL: "4", ENGINE_CTX: "32768"}, concurrency: [1, 2, 4]}

@@ -53,9 +53,16 @@ class Procs:
         self.engine: subprocess.Popen[bytes] | None = None
         self.gateway: subprocess.Popen[bytes] | None = None
 
-    def start_engine(self, profile: str = "bfcl") -> None:
-        env = {**os.environ, "ENGINE_PROFILE": profile}
-        log = (LOGS / "reliability-engine.log").open("ab")
+    def start_engine(
+        self,
+        profile: str = "bfcl",
+        env_overrides: dict[str, str] | None = None,
+        log_name: str = "reliability-engine.log",
+    ) -> Path:
+        env = {**os.environ, "ENGINE_PROFILE": profile, **(env_overrides or {})}
+        LOGS.mkdir(exist_ok=True)
+        log_path = LOGS / log_name
+        log = log_path.open("ab")
         self.engine = subprocess.Popen(
             [str(ROOT / "scripts" / "run_engine.sh")],
             env=env,
@@ -63,14 +70,17 @@ class Procs:
             stderr=subprocess.STDOUT,
             cwd=ROOT,
         )
+        return log_path
 
-    def start_gateway(self, overrides: dict[str, str] | None = None) -> None:
-        env = {
-            **os.environ,
-            "INFERSCALE_CONFIG_FILE": "configs/serving/mac-llamacpp-bfcl-gwv.yaml",
-            **(overrides or {}),
-        }
-        log = (LOGS / "reliability-gateway.log").open("ab")
+    def start_gateway(
+        self,
+        overrides: dict[str, str] | None = None,
+        config_file: str = "configs/serving/mac-llamacpp-bfcl-gwv.yaml",
+        log_name: str = "reliability-gateway.log",
+    ) -> None:
+        env = {**os.environ, "INFERSCALE_CONFIG_FILE": config_file, **(overrides or {})}
+        LOGS.mkdir(exist_ok=True)
+        log = (LOGS / log_name).open("ab")
         self.gateway = subprocess.Popen(
             [
                 sys.executable,

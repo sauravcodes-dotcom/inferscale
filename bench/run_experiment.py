@@ -16,7 +16,7 @@ import json
 import re
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -27,14 +27,22 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from bench import analyze
-from bench.harness import Target, run_load
-from bench.memory_sampler import MemorySampler, swap_used_mb, swap_validity
-from bench.workload import pag_prompts
-from evals.dataset import ROOT
+from bench.harness import Prompt, Target, run_load
+from bench.memory_sampler import MemorySampler, parse_prom, swap_used_mb, swap_validity
+from bench.workload import bfcl_requests, pag_prompts
+from evals.dataset import ROOT, sha256_file
 from evals.fingerprint import engine_props, git_state, host_state
 from inferscale.registry import load_registry
 
 Messages = list[dict[str, str]]
+ENGINE_COUNTERS = (
+    "llamacpp:prompt_tokens_total",
+    "llamacpp:prompt_seconds_total",
+    "llamacpp:tokens_predicted_total",
+    "llamacpp:tokens_predicted_seconds_total",
+    "llamacpp:n_decode_total",
+    "llamacpp:n_busy_slots_per_decode",
+)
 
 
 class _Strict(BaseModel):
@@ -42,8 +50,10 @@ class _Strict(BaseModel):
 
 
 class Workload(_Strict):
-    dataset: Literal["pag"] = "pag"
+    dataset: Literal["pag", "bfcl"] = "pag"
     split_file: str = "splits/pag_v1.json"
+    # bfcl: requests exported by tools/bfcl/export_requests.py (dev only; never the test split)
+    categories: list[str] | None = None
     partition: Literal["dev", "pool", "test"] = "pool"
     prompt: str = "pag_v1"
     response_format: Literal["none", "json_schema"] = "json_schema"
@@ -147,10 +157,53 @@ async def check_health(exp: Experiment) -> list[str]:
 # --- run -----------------------------------------------------------------------
 
 
+async def engine_counters(url: str) -> dict[str, float | None]:
+    try:
+        async with httpx.AsyncClient(timeout=3) as c:
+            return parse_prom((await c.get(f"{url}/metrics")).text, ENGINE_COUNTERS)
+    except httpx.HTTPError:
+        return dict.fromkeys(ENGINE_COUNTERS)
+
+
+def engine_delta(
+    before: dict[str, float | None], after: dict[str, float | None], client_prompt_tokens: int
+) -> dict[str, float | None]:
+    """Engine-side work during one run, from llama.cpp's cumulative counters.
+
+    `prompt_tokens_total` counts only tokens the engine evaluated, so prompt tokens reused from
+    its prompt cache are the gap to what clients sent. The seconds counters sum per-request time
+    (concurrent slots both accrue), so the rates are per-request rates, not aggregate throughput.
+    """
+
+    def d(name: str) -> float | None:
+        a, b = before.get(f"llamacpp:{name}"), after.get(f"llamacpp:{name}")
+        return None if a is None or b is None else b - a
+
+    pt, ps, gt, gs = (
+        d("prompt_tokens_total"),
+        d("prompt_seconds_total"),
+        d("tokens_predicted_total"),
+        d("tokens_predicted_seconds_total"),
+    )
+    return {
+        "prompt_tokens_evaluated": pt,
+        "prompt_seconds": ps,
+        "prefill_tok_s": pt / ps if pt and ps else None,
+        "tokens_predicted": gt,
+        "decode_seconds": gs,
+        "decode_tok_s_per_request": gt / gs if gt and gs else None,
+        "client_prompt_tokens": client_prompt_tokens,
+        "prompt_cache_reuse_fraction": (
+            1 - pt / client_prompt_tokens if pt is not None and client_prompt_tokens else None
+        ),
+        "busy_slots_per_decode": after.get("llamacpp:n_busy_slots_per_decode"),
+    }
+
+
 async def run_experiment(
     exp: Experiment,
     *,
-    prompts: list[Messages],
+    prompts: Sequence[Prompt],
     workload_fingerprint: dict[str, Any],
     preflight: dict[str, Any],
     response_format: dict[str, Any] | None = None,
@@ -189,6 +242,7 @@ async def run_experiment(
             if sampler_factory
             else MemorySampler(exp.engine_url, exp.gateway_url)
         )
+        counters_before = await engine_counters(exp.engine_url)
         async with sampler:
             run = await run_load(
                 target,
@@ -204,12 +258,19 @@ async def run_experiment(
                 transport=transport,
             )
         run["repeat"] = rep
+        # Counters cover warm-up too, so the client-side total does as well.
+        run["engine"] = engine_delta(
+            counters_before,
+            await engine_counters(exp.engine_url),
+            sum(r.get("prompt_tokens") or 0 for r in run["records"]),
+        )
         run["samples"] = sampler.samples
         run["validity"] = swap_validity(sampler.samples, exp.max_swap_growth_mb)
         run["summary"] = analyze.run_metrics(run, n_boot=200, seed=exp.seed)
         s = run["summary"]
         log(
             f"    ok {s['n_ok']}/{s['n']}  ttft p50 {analyze._ms(s['ttft_s']['p50'])} ms  "
+            f"e2e p50 {analyze._ms(s['e2e_s']['p50'])} ms  "
             f"decode p50 {analyze._s(s['decode_tok_s']['p50'], 1)} tok/s  "
             f"valid={run['validity']['valid']}"
         )
@@ -228,6 +289,28 @@ async def run_experiment(
         "valid": all(r["validity"]["valid"] is not False for r in runs),
         "runs": runs,
     }
+
+
+def load_workload(
+    w: Workload,
+) -> tuple[Sequence[Prompt], dict[str, Any] | None, dict[str, Any]]:
+    if w.dataset == "bfcl":
+        if w.partition != "dev":
+            raise SystemExit("bfcl benchmark workloads use the dev partition only")
+        reqs = bfcl_requests("dev", w.categories)
+        path = ROOT / "results" / "bfcl" / "raw" / "requests-dev.jsonl"
+        fp = {
+            "workload": {
+                "dataset": "bfcl",
+                "partition": "dev",
+                "categories": w.categories,
+                "n_requests_available": len(reqs),
+                "requests_sha256": sha256_file(path),
+                "split_file": "splits/bfcl_v4_single_turn_v1.json",
+            }
+        }
+        return reqs, None, fp
+    return pag_prompts(w.split_file, w.partition, w.prompt, w.response_format)
 
 
 def write_result(exp: Experiment, result: dict[str, Any], out_root: Path) -> Path:
@@ -266,8 +349,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"health: {p}", file=sys.stderr)
         return 3
 
-    w = exp.workload
-    prompts, rf, wfp = pag_prompts(w.split_file, w.partition, w.prompt, w.response_format)
+    prompts, rf, wfp = load_workload(exp.workload)
     result = asyncio.run(
         run_experiment(
             exp, prompts=prompts, workload_fingerprint=wfp, preflight=preflight, response_format=rf

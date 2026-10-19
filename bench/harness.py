@@ -23,6 +23,8 @@ from typing import Any, Literal
 import httpx
 
 Mode = Literal["closed", "open"]
+# A workload item: a chat message list, or a full request {"messages": [...], "tools": [...]}.
+Prompt = list[dict[str, Any]] | dict[str, Any]
 
 
 @dataclass
@@ -39,6 +41,7 @@ class RequestRecord:
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     finish_reason: str | None = None
+    n_tool_calls: int = 0
     content: str | None = None  # only filled when capture_content=True
 
     @property
@@ -59,9 +62,9 @@ class Target:
     model: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)  # e.g. response_format
 
-    def body(
-        self, messages: list[dict[str, str]], max_tokens: int, temperature: float
-    ) -> dict[str, Any]:
+    def body(self, prompt: Prompt, max_tokens: int, temperature: float) -> dict[str, Any]:
+        """`prompt` is a message list, or a request dict with "messages" and optional "tools"."""
+        messages = prompt["messages"] if isinstance(prompt, dict) else prompt
         b: dict[str, Any] = {
             "messages": messages,
             "max_tokens": max_tokens,
@@ -71,6 +74,8 @@ class Target:
         }
         if self.model:
             b["model"] = self.model
+        if isinstance(prompt, dict) and prompt.get("tools"):
+            b["tools"] = prompt["tools"]
         b.update(self.extra)
         return b
 
@@ -114,13 +119,17 @@ async def stream_one(
                     )
                     break
                 for choice in chunk.get("choices") or []:
-                    text = (choice.get("delta") or {}).get("content")
-                    if text:
+                    delta = choice.get("delta") or {}
+                    text = delta.get("content")
+                    calls = delta.get("tool_calls") or []
+                    # A tool-call delta is output too: the first one counts as the first token.
+                    rec.n_tool_calls += sum(1 for c in calls if c.get("id"))
+                    if text or calls:
                         t = _now(t0)
                         if rec.first_token_t is None:
                             rec.first_token_t = t
                         rec.delta_ts.append(t)
-                        if capture_content:
+                        if capture_content and text:
                             parts.append(text)
                     if choice.get("finish_reason"):
                         rec.finish_reason = choice["finish_reason"]
@@ -196,7 +205,7 @@ async def _open(
 
 async def run_load(
     target: Target,
-    prompts: Sequence[list[dict[str, str]]],
+    prompts: Sequence[Prompt],
     *,
     n_requests: int,
     max_tokens: int,
