@@ -63,6 +63,12 @@ class Metrics:
             ["reason"],
             registry=r,
         )
+        self.tool_call_fallbacks = Counter(
+            "inferscale_tool_call_fallbacks",
+            "Tool requests re-served by the constrained engine path after schema validation failed",
+            ["to"],
+            registry=r,
+        )
         self.engine_up = Gauge(
             "inferscale_engine_up", "1 if the engine health check passes", registry=r
         )

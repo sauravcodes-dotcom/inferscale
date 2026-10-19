@@ -32,7 +32,7 @@ WEATHER = fn("get_weather", {"city": {"type": "string"}}, ["city"])
 STOCK = fn("get_stock_price", {"ticker": {"type": "string"}}, ["ticker"])
 
 
-@pytest.fixture(params=["engine", "gateway"])
+@pytest.fixture(params=["engine", "gateway", "gateway_validated"])
 async def gateway(request: pytest.FixtureRequest) -> AsyncIterator[httpx.AsyncClient]:
     try:
         async with httpx.AsyncClient(timeout=2) as probe:

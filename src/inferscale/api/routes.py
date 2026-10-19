@@ -52,6 +52,7 @@ class RequestRecord:
         self.error: str | None = None
         self.n_tools = 0
         self.finish_reason: str | None = None
+        self.tool_call_fallback: str | None = None
         self._done = False
 
     def fail(self, err: GatewayError) -> None:
@@ -64,6 +65,9 @@ class RequestRecord:
             self.prompt_tokens, self.completion_tokens = usage
 
     def observe_choices(self, body: Json) -> None:
+        meta = body.get("x_inferscale")
+        if isinstance(meta, dict) and meta.get("fallback"):
+            self.tool_call_fallback = str(meta["fallback"])
         for choice in body.get("choices") or []:
             if choice.get("finish_reason"):
                 self.finish_reason = str(choice["finish_reason"])
@@ -84,6 +88,8 @@ class RequestRecord:
             m.completion_tokens.inc(self.completion_tokens)
         if self.finish_reason:
             m.finish_reasons.labels(reason=self.finish_reason).inc()
+        if self.tool_call_fallback:
+            m.tool_call_fallbacks.labels(to=self.tool_call_fallback).inc()
         self.gw.log.info(
             "request",
             request_id=self.request_id,
@@ -98,6 +104,7 @@ class RequestRecord:
             completion_tokens=self.completion_tokens,
             n_tools=self.n_tools,
             finish_reason=self.finish_reason,
+            tool_call_fallback=self.tool_call_fallback,
         )
 
 

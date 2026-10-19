@@ -172,3 +172,38 @@ class StreamParser:
         self._buf = ""
         self._in_call = False
         return text, calls
+
+
+def validate_calls(calls: list[Json], tools: list[Json]) -> list[str]:
+    """Check each call against its tool's JSON schema. Returns human-readable problems.
+
+    Unknown function names, unparsable arguments, missing required parameters, wrong types and
+    values outside an enum are problems. A tool whose parameter schema is itself not valid JSON
+    Schema is not checked (no spurious failures on unusual schemas).
+    """
+    from jsonschema import Draft202012Validator
+    from jsonschema.exceptions import SchemaError
+
+    by_name = {
+        t["function"]["name"]: t["function"] for t in tools if isinstance(t.get("function"), dict)
+    }
+    problems: list[str] = []
+    for call in calls:
+        fn = call["function"]
+        spec = by_name.get(fn["name"])
+        if spec is None:
+            problems.append(f"unknown function {fn['name']!r}")
+            continue
+        try:
+            args = json.loads(fn["arguments"])
+        except ValueError:
+            problems.append(f"{fn['name']}: arguments are not JSON")
+            continue
+        schema = spec.get("parameters") or {"type": "object"}
+        try:
+            Draft202012Validator.check_schema(schema)
+        except SchemaError:
+            continue
+        for err in Draft202012Validator(schema).iter_errors(args):
+            problems.append(f"{fn['name']}: {err.message}")
+    return problems

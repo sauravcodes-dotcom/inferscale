@@ -236,3 +236,138 @@ async def test_gateway_mode_context_error_mapping() -> None:
     with pytest.raises(ContextLengthExceededError):
         await b.complete({"messages": [], "tools": TOOLS})
     await b.aclose()
+
+
+# --- schema validation and gateway_validated fallback --------------------------------
+
+from inferscale.backends.tool_parsing import validate_calls  # noqa: E402
+
+SCHEMA_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "f",
+        "parameters": {
+            "type": "object",
+            "required": ["s"],
+            "properties": {
+                "s": {"type": "string"},
+                "n": {"type": "integer"},
+                "e": {"type": "string", "enum": ["a", "b"]},
+            },
+        },
+    },
+}
+
+
+def call(name: str, args: Any) -> dict[str, Any]:
+    return {
+        "function": {"name": name, "arguments": args if isinstance(args, str) else json.dumps(args)}
+    }
+
+
+@pytest.mark.parametrize(
+    ("c", "problem"),
+    [
+        (call("f", {"s": "x", "n": 1, "e": "a"}), None),
+        (call("f", {"s": ["x"]}), "is not of type 'string'"),
+        (call("f", {"n": 1}), "'s' is a required property"),
+        (call("f", {"s": "x", "e": "z"}), "is not one of"),
+        (call("g", {"s": "x"}), "unknown function"),
+        (call("f", "{not json"), "not JSON"),
+    ],
+)
+def test_validate_calls(c: dict[str, Any], problem: str | None) -> None:
+    problems = validate_calls([c], [SCHEMA_TOOL])
+    assert (problems == []) if problem is None else any(problem in p for p in problems)
+
+
+def test_invalid_schema_is_not_checked() -> None:
+    bad = {
+        "type": "function",
+        "function": {
+            "name": "f",
+            "parameters": {"type": "object", "properties": {"x": {"type": "dict"}}},
+        },
+    }
+    assert validate_calls([call("f", {"x": 1})], [bad]) == []
+
+
+class FallbackEngine(MockEngine):
+    def __call__(self, req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v1/chat/completions":
+            self.requests.append((req.url.path, json.loads(req.content)))
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "index": 0,
+                            "finish_reason": "tool_calls",
+                            "message": {
+                                "role": "assistant",
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "id": "c",
+                                        "type": "function",
+                                        "function": {"name": "f", "arguments": '{"s": "x"}'},
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                },
+            )
+        return super().__call__(req)
+
+
+async def test_validated_mode_falls_back_on_schema_violation() -> None:
+    engine = FallbackEngine(
+        '<tool_call>{"name": "f", "arguments": {"s": ["not", "a", "string"]}}</tool_call>'
+    )
+    b = backend(engine, "gateway_validated")
+    out = await b.complete({"messages": [], "tools": [SCHEMA_TOOL]})
+    assert [p for p, _ in engine.requests] == [
+        "/apply-template",
+        "/completion",
+        "/v1/chat/completions",
+    ]
+    assert out["x_inferscale"]["fallback"] == "engine"
+    assert "is not of type 'string'" in out["x_inferscale"]["fallback_reasons"][0]
+    assert json.loads(out["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]) == {
+        "s": "x"
+    }
+    await b.aclose()
+
+
+async def test_validated_mode_keeps_valid_unconstrained_output_and_streams_it() -> None:
+    engine = FallbackEngine('<tool_call>{"name": "f", "arguments": {"n": 2, "s": "y"}}</tool_call>')
+    b = backend(engine, "gateway_validated")
+    chunks = [
+        c
+        async for c in b.stream(
+            {"messages": [], "tools": [SCHEMA_TOOL], "stream_options": {"include_usage": True}}
+        )
+    ]
+    assert "/v1/chat/completions" not in [p for p, _ in engine.requests]  # no fallback
+    calls = [
+        tc
+        for c in chunks
+        if c["choices"]
+        for tc in c["choices"][0]["delta"].get("tool_calls") or []
+    ]
+    assert calls[0]["function"]["arguments"] == '{"n": 2, "s": "y"}'  # model's own order kept
+    finish = next(c for c in chunks if c["choices"] and c["choices"][0]["finish_reason"])
+    assert finish["x_inferscale"]["fallback"] is None
+    assert chunks[-1]["usage"]["completion_tokens"] == 21
+    await b.aclose()
+
+
+async def test_validated_mode_falls_back_on_malformed_block() -> None:
+    engine = FallbackEngine("<tool_call>{'name': 'f'}</tool_call>")
+    b = backend(engine, "gateway_validated")
+    out = await b.complete({"messages": [], "tools": [SCHEMA_TOOL]})
+    assert out["x_inferscale"]["fallback"] == "engine"
+    assert "malformed" in out["x_inferscale"]["fallback_reasons"][-1]
+    await b.aclose()

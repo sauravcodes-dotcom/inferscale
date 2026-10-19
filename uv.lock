@@ -336,6 +336,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "jsonschema" },
     { name = "prometheus-client" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -364,6 +365,7 @@ semantic = [
 requires-dist = [
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "jsonschema", specifier = ">=4.26.0" },
     { name = "prometheus-client" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pydantic-settings" },

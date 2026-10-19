@@ -62,8 +62,9 @@ class Settings(BaseSettings):
     log_content: bool = False
     # How requests with tools are served (see inferscale.backends.openai_http):
     # "engine" = llama.cpp chat endpoint (grammar-constrained), "gateway" = unconstrained
-    # generation + gateway-side tool-call parsing.
-    tool_call_mode: Literal["engine", "gateway"] = "engine"
+    # generation + gateway-side tool-call parsing, "gateway_validated" = gateway + JSON-schema
+    # validation of each call with fallback to the engine's constrained path.
+    tool_call_mode: Literal["engine", "gateway", "gateway_validated"] = "engine"
 
     @classmethod
     def settings_customise_sources(

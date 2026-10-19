@@ -495,3 +495,24 @@ async def test_tool_result_round_trip(make_app: AppFactory) -> None:
 async def test_invalid_tools_rejected_400(client: httpx.AsyncClient) -> None:
     r = await client.post("/v1/chat/completions", json=chat_body(tool_choice="required"))
     assert r.status_code == 400 and r.json()["error"]["code"] == "invalid_request"
+
+
+class FallbackFake(FakeBackend):
+    async def complete(self, payload: dict[str, Any]) -> dict[str, Any]:
+        body = await super().complete(payload)
+        body["x_inferscale"] = {"tool_call_mode": "gateway_validated", "fallback": "engine"}
+        return body
+
+
+async def test_tool_call_fallback_metric_and_log(
+    make_app: AppFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    app, gw = make_app(FallbackFake(tool_calls=CALLS))
+    async with client_for(app) as c:
+        await c.post(
+            "/v1/chat/completions", json=chat_body(tools=[TOOL]), headers={"X-Request-ID": "fb-1"}
+        )
+    m = gw.metrics.render().decode()
+    assert metric_value(m, "inferscale_tool_call_fallbacks_total", 'to="engine"') == 1
+    log = next(json.loads(x) for x in capsys.readouterr().out.splitlines() if '"fb-1"' in x)
+    assert log["tool_call_fallback"] == "engine"

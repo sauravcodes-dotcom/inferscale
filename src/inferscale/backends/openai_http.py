@@ -11,7 +11,7 @@ from typing import Any, Literal
 import httpx
 
 from inferscale.backends.base import Json
-from inferscale.backends.tool_parsing import StreamParser, parse_output
+from inferscale.backends.tool_parsing import StreamParser, parse_output, validate_calls
 from inferscale.core.errors import (
     ContextLengthExceededError,
     EngineError,
@@ -22,7 +22,7 @@ from inferscale.core.errors import (
 CHAT_PATH = "/v1/chat/completions"
 TEMPLATE_PATH = "/apply-template"
 COMPLETION_PATH = "/completion"
-ToolCallMode = Literal["engine", "gateway"]
+ToolCallMode = Literal["engine", "gateway", "gateway_validated"]
 
 
 def _engine_message(resp: httpx.Response) -> str:
@@ -59,6 +59,11 @@ class OpenAIHTTPBackend:
     tool_call_mode="gateway": requests with tools are rendered with the model's chat template
     (/apply-template), generated without the tool grammar (/completion) and parsed by
     inferscale.backends.tool_parsing. Requests without tools are unaffected by the mode.
+    tool_call_mode="gateway_validated": as "gateway", but every parsed call is validated against
+    its tool's JSON schema; if any call fails (unknown function, wrong type, missing required
+    parameter, value outside an enum) or a tool-call block is malformed, the request is served
+    again by the engine's schema-constrained path. Streaming responses in this mode are produced
+    after generation completes (tool-call deltas were whole calls anyway).
     """
 
     def __init__(
@@ -73,7 +78,7 @@ class OpenAIHTTPBackend:
 
     def _gateway_tools(self, payload: Json) -> bool:
         return (
-            self.tool_call_mode == "gateway"
+            self.tool_call_mode in ("gateway", "gateway_validated")
             and bool(payload.get("tools"))
             and payload.get("tool_choice") != "none"
             and "response_format" not in payload
@@ -134,6 +139,18 @@ class OpenAIHTTPBackend:
         prompt = await self._render(payload)
         d = await self._post(COMPLETION_PATH, self._completion_body(payload, prompt, stream=False))
         parsed = parse_output(str(d.get("content") or ""))
+        if self.tool_call_mode == "gateway_validated":
+            problems = validate_calls(parsed.tool_calls, payload["tools"])
+            if parsed.malformed:
+                problems.append(f"{parsed.malformed} malformed tool-call block(s)")
+            if problems:
+                body = await self._complete_engine(payload)
+                body["x_inferscale"] = {
+                    "tool_call_mode": "gateway_validated",
+                    "fallback": "engine",
+                    "fallback_reasons": problems[:5],
+                }
+                return body
         message: Json = {"role": "assistant", "content": parsed.content}
         if parsed.tool_calls:
             message["tool_calls"] = parsed.tool_calls
@@ -150,8 +167,40 @@ class OpenAIHTTPBackend:
                 }
             ],
             "usage": self._usage(d),
-            "x_inferscale": {"tool_call_mode": "gateway", "malformed_tool_calls": parsed.malformed},
+            "x_inferscale": {
+                "tool_call_mode": self.tool_call_mode,
+                "fallback": None,
+                "malformed_tool_calls": parsed.malformed,
+            },
         }
+
+    async def _stream_validated(self, payload: Json) -> AsyncIterator[Json]:
+        """Validated mode streams a completed (possibly fallback) response as chunks."""
+        body = await self._complete_tools(payload)
+        choice = body["choices"][0]
+        msg = choice["message"]
+        base = {
+            "id": body.get("id", f"chatcmpl-{uuid.uuid4().hex}"),
+            "object": "chat.completion.chunk",
+            "created": body.get("created", int(time.time())),
+            "model": body.get("model", ""),
+        }
+
+        def chunk(delta: Json, finish: str | None = None, **extra: Any) -> Json:
+            return {
+                **base,
+                "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+                **extra,
+            }
+
+        yield chunk({"role": "assistant", "content": None})
+        if msg.get("content"):
+            yield chunk({"content": msg["content"]})
+        for i, call in enumerate(msg.get("tool_calls") or []):
+            yield chunk({"tool_calls": [{"index": i, **call}]})
+        yield chunk({}, choice.get("finish_reason"), x_inferscale=body.get("x_inferscale"))
+        if (payload.get("stream_options") or {}).get("include_usage"):
+            yield {**base, "choices": [], "usage": body.get("usage")}
 
     async def _stream_tools(self, payload: Json) -> AsyncIterator[Json]:
         prompt = await self._render(payload)
@@ -244,6 +293,9 @@ class OpenAIHTTPBackend:
     async def complete(self, payload: Json) -> Json:
         if self._gateway_tools(payload):
             return await self._complete_tools(payload)
+        return await self._complete_engine(payload)
+
+    async def _complete_engine(self, payload: Json) -> Json:
         try:
             resp = await self._client.post(CHAT_PATH, json={**payload, "stream": False})
         except (httpx.ConnectError, httpx.ConnectTimeout) as e:
@@ -259,7 +311,12 @@ class OpenAIHTTPBackend:
 
     async def stream(self, payload: Json) -> AsyncIterator[Json]:
         if self._gateway_tools(payload):
-            async for c in self._stream_tools(payload):
+            gen = (
+                self._stream_validated(payload)
+                if self.tool_call_mode == "gateway_validated"
+                else self._stream_tools(payload)
+            )
+            async for c in gen:
                 yield c
             return
         body = {**payload, "stream": True}
