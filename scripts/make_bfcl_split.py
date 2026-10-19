@@ -27,18 +27,10 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-BFCL_VERSION = "2026.3.23"
-DATA_DIR = (
-    ROOT
-    / "tools"
-    / "bfcl"
-    / ".venv"
-    / "lib"
-    / "python3.12"
-    / "site-packages"
-    / "bfcl_eval"
-    / "data"
-)
+sys.path.insert(0, str(ROOT))
+
+from evals.bfcl.data import BFCL_VERSION, DATA_DIR  # noqa: E402
+
 OUT = ROOT / "splits" / "bfcl_v4_single_turn_v1.json"
 SEED = 20261018
 DEV_FRACTION = 0.10

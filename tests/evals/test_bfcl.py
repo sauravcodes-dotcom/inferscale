@@ -235,3 +235,52 @@ def test_freeze_guard(tmp_path: Path) -> None:
         )
         or ""
     )
+
+
+# --- baselines --------------------------------------------------------------------
+
+from evals.bfcl import baselines  # noqa: E402
+
+
+def test_bm25_prefers_matching_function() -> None:
+    entry = {
+        "question": [
+            [{"role": "user", "content": "What is the weather forecast in Paris tomorrow?"}]
+        ],
+        "function": [
+            {
+                "name": "stock.get_price",
+                "description": "Latest stock price",
+                "parameters": {"properties": {"ticker": {}}},
+            },
+            {
+                "name": "weather.forecast",
+                "description": "Weather forecast for a city",
+                "parameters": {"properties": {"city": {}}},
+            },
+        ],
+    }
+    assert baselines.bm25_choice(entry) == "weather.forecast"
+    assert baselines.as_fc_name("weather.forecast") == "weather_forecast"
+    assert baselines.bm25_choice({"question": [[]], "function": []}) is None
+
+
+def test_tokens_split_camel_and_snake() -> None:
+    assert baselines.tokens("getUserName math.factorial") == [
+        "get",
+        "user",
+        "name",
+        "math",
+        "factorial",
+    ]
+
+
+def test_selection_accuracy(monkeypatch: pytest.MonkeyPatch) -> None:
+    truth = {"m_0": [{"weather.forecast": {"city": ["Paris"]}}], "m_1": [{"a.b": {}}]}
+    monkeypatch.setattr(
+        baselines, "load_possible_answers", lambda cat: truth if cat == "multiple" else {}
+    )
+    res = baselines.selection_accuracy(
+        {"multiple": ["m_0", "m_1"]}, {"m_0": "weather_forecast", "m_1": "x"}
+    )
+    assert res["multiple"] == {"n": 2, "accuracy": 0.5}

@@ -32,8 +32,8 @@ WEATHER = fn("get_weather", {"city": {"type": "string"}}, ["city"])
 STOCK = fn("get_stock_price", {"ticker": {"type": "string"}}, ["ticker"])
 
 
-@pytest.fixture
-async def gateway() -> AsyncIterator[httpx.AsyncClient]:
+@pytest.fixture(params=["engine", "gateway"])
+async def gateway(request: pytest.FixtureRequest) -> AsyncIterator[httpx.AsyncClient]:
     try:
         async with httpx.AsyncClient(timeout=2) as probe:
             ok = (await probe.get(f"{ENGINE_URL}/health")).json().get("status") == "ok"
@@ -41,7 +41,8 @@ async def gateway() -> AsyncIterator[httpx.AsyncClient]:
         ok = False
     if not ok:
         pytest.fail(f"engine not healthy at {ENGINE_URL}; run `make engine` first")
-    app = create_app(settings=load_settings(SERVING_PATH), install_signal_handlers=False)
+    settings = load_settings(SERVING_PATH).model_copy(update={"tool_call_mode": request.param})
+    app = create_app(settings=settings, install_signal_handlers=False)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://gw", timeout=120
     ) as c:

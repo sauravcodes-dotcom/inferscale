@@ -1,0 +1,350 @@
+{
+ "baselines": {
+  "bm25_noargs": {
+   "bootstrap": {
+    "n_boot": 1000,
+    "seed": 1234,
+    "stratified_by": "category"
+   },
+   "error_classes": {
+    "called_when_irrelevant": 112,
+    "wrong_arguments": 180,
+    "wrong_call_count": 40,
+    "wrong_function": 14
+   },
+   "error_classes_by_category": {
+    "irrelevance": {
+     "called_when_irrelevant": 24
+    },
+    "live_irrelevance": {
+     "called_when_irrelevant": 88
+    },
+    "live_multiple": {
+     "wrong_arguments": 92,
+     "wrong_function": 12
+    },
+    "live_simple": {
+     "wrong_arguments": 15
+    },
+    "multiple": {
+     "wrong_arguments": 18,
+     "wrong_function": 2
+    },
+    "parallel": {
+     "wrong_call_count": 20
+    },
+    "parallel_multiple": {
+     "wrong_call_count": 20
+    },
+    "simple_java": {
+     "wrong_arguments": 10
+    },
+    "simple_javascript": {
+     "wrong_arguments": 5
+    },
+    "simple_python": {
+     "wrong_arguments": 40
+    }
+   },
+   "metrics": {
+    "irrelevance": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 24,
+     "value": 0.0
+    },
+    "live": {
+     "ci95": [
+      0.0,
+      0.025
+     ],
+     "n": null,
+     "value": 0.008333
+    },
+    "live_irrelevance": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 88,
+     "value": 0.0
+    },
+    "live_multiple": {
+     "ci95": [
+      0.0,
+      0.028571
+     ],
+     "n": 105,
+     "value": 0.009524
+    },
+    "live_parallel": {
+     "ci95": null,
+     "n": 0,
+     "value": null
+    },
+    "live_parallel_multiple": {
+     "ci95": null,
+     "n": 0,
+     "value": null
+    },
+    "live_relevance": {
+     "ci95": null,
+     "n": 0,
+     "value": null
+    },
+    "live_simple": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 15,
+     "value": 0.0
+    },
+    "multiple": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 20,
+     "value": 0.0
+    },
+    "non_live_ast": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": null,
+     "value": 0.0
+    },
+    "non_live_simple": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": null,
+     "value": 0.0
+    },
+    "parallel": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 20,
+     "value": 0.0
+    },
+    "parallel_multiple": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 20,
+     "value": 0.0
+    },
+    "simple_java": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 10,
+     "value": 0.0
+    },
+    "simple_javascript": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 5,
+     "value": 0.0
+    },
+    "simple_python": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 40,
+     "value": 0.0
+    }
+   },
+   "n": 347,
+   "serving_errors": 0
+  },
+  "never_call": {
+   "bootstrap": {
+    "n_boot": 1000,
+    "seed": 1234,
+    "stratified_by": "category"
+   },
+   "error_classes": {
+    "undecodable_output": 235
+   },
+   "error_classes_by_category": {
+    "irrelevance": {},
+    "live_irrelevance": {},
+    "live_multiple": {
+     "undecodable_output": 105
+    },
+    "live_simple": {
+     "undecodable_output": 15
+    },
+    "multiple": {
+     "undecodable_output": 20
+    },
+    "parallel": {
+     "undecodable_output": 20
+    },
+    "parallel_multiple": {
+     "undecodable_output": 20
+    },
+    "simple_java": {
+     "undecodable_output": 10
+    },
+    "simple_javascript": {
+     "undecodable_output": 5
+    },
+    "simple_python": {
+     "undecodable_output": 40
+    }
+   },
+   "metrics": {
+    "irrelevance": {
+     "ci95": [
+      1.0,
+      1.0
+     ],
+     "n": 24,
+     "value": 1.0
+    },
+    "live": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": null,
+     "value": 0.0
+    },
+    "live_irrelevance": {
+     "ci95": [
+      1.0,
+      1.0
+     ],
+     "n": 88,
+     "value": 1.0
+    },
+    "live_multiple": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 105,
+     "value": 0.0
+    },
+    "live_parallel": {
+     "ci95": null,
+     "n": 0,
+     "value": null
+    },
+    "live_parallel_multiple": {
+     "ci95": null,
+     "n": 0,
+     "value": null
+    },
+    "live_relevance": {
+     "ci95": null,
+     "n": 0,
+     "value": null
+    },
+    "live_simple": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 15,
+     "value": 0.0
+    },
+    "multiple": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 20,
+     "value": 0.0
+    },
+    "non_live_ast": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": null,
+     "value": 0.0
+    },
+    "non_live_simple": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": null,
+     "value": 0.0
+    },
+    "parallel": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 20,
+     "value": 0.0
+    },
+    "parallel_multiple": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 20,
+     "value": 0.0
+    },
+    "simple_java": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 10,
+     "value": 0.0
+    },
+    "simple_javascript": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 5,
+     "value": 0.0
+    },
+    "simple_python": {
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "n": 40,
+     "value": 0.0
+    }
+   },
+   "n": 347,
+   "serving_errors": 0
+  }
+ },
+ "function_selection": {
+  "bm25": {
+   "live_multiple": {
+    "accuracy": 0.8857142857142857,
+    "n": 105
+   },
+   "multiple": {
+    "accuracy": 0.9,
+    "n": 20
+   }
+  }
+ },
+ "ids_sha256": "c0b42e207ae4c363e5b782531f4e314eba341e1f7f594407322587942bc59ba8",
+ "partition": "dev",
+ "split_sha256": "cfeadb3a38e041e06d24f52d47482fd076d65e403683fb0da6de599de11fbf24"
+}

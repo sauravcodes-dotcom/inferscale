@@ -141,7 +141,9 @@ def create_app(
     settings = settings or load_settings()
     registry = registry or load_registry(settings.registry_path)
     backend = backend or OpenAIHTTPBackend(
-        settings.engine_url, connect_timeout_s=settings.deadlines.connect_timeout_s
+        settings.engine_url,
+        connect_timeout_s=settings.deadlines.connect_timeout_s,
+        tool_call_mode=settings.tool_call_mode,
     )
     gw = Gateway(settings, registry, backend)
 

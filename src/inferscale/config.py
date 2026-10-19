@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import (
@@ -59,6 +60,10 @@ class Settings(BaseSettings):
     drain_timeout_s: float = Field(default=30.0, ge=0)
     health_poll_interval_s: float = Field(default=2.0, gt=0)
     log_content: bool = False
+    # How requests with tools are served (see inferscale.backends.openai_http):
+    # "engine" = llama.cpp chat endpoint (grammar-constrained), "gateway" = unconstrained
+    # generation + gateway-side tool-call parsing.
+    tool_call_mode: Literal["engine", "gateway"] = "engine"
 
     @classmethod
     def settings_customise_sources(

@@ -1,0 +1,32 @@
+# Serving profile: BFCL tool calling with gateway-side tool-call parsing (tool_call_mode: gateway).
+# Pair with ENGINE_PROFILE=bfcl (8192 tokens per slot).
+# Longer deadlines: a 6.5k-token prompt needs ~30 s of prompt processing on the M1 Pro.
+# Any field can be overridden by env INFERSCALE_<FIELD> (nested: INFERSCALE_LIMITS__MAX_TOKENS_CAP).
+engine_url: http://127.0.0.1:8081
+registry_path: configs/models/registry.yaml
+
+admission:
+  max_inflight: 2          # = engine slots (-np)
+  max_queue: 8
+  queue_timeout_s: 10.0
+  retry_after_s: 1
+
+deadlines:
+  connect_timeout_s: 2.0
+  first_token_timeout_s: 90.0
+  total_timeout_s: 180.0
+
+limits:
+  max_messages: 32
+  max_input_chars: 16000
+  max_tokens_cap: 1024     # PAG eval uses max_tokens 1024
+  default_max_tokens: 256
+  max_tools: 128
+  max_tools_chars: 65536
+
+drain_timeout_s: 30.0
+health_poll_interval_s: 2.0
+log_content: false
+
+# Unconstrained generation + gateway parsing; avoids llama.cpp schema-order grammar corruption.
+tool_call_mode: gateway

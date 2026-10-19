@@ -16,3 +16,4 @@ logs/
 /results/eval/smoke/
 /tools/bfcl/.venv/
 /results/bfcl/raw/
+/results/bfcl/smoke/
