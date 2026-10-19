@@ -297,3 +297,32 @@ def test_paired_bootstrap_compare() -> None:
     assert lo <= 0.5 <= hi
     assert res["mcnemar"]["by_category"]["simple_python"]["b_only_correct"] == 1
     assert res["error_classes"]["a"] == {"x": 4} and res["error_classes"]["b"] == {"x": 2}
+
+
+def test_cluster_key_groups_live_source_conversations() -> None:
+    from evals.bfcl.metrics import cluster_key
+
+    assert cluster_key("live_multiple_595-158-1") == cluster_key("live_simple_12-158-0")
+    assert cluster_key("live_multiple_595-158-1") != cluster_key("live_multiple_600-159-0")
+    assert cluster_key("simple_python_3") == "simple_python_3"
+    assert cluster_key("live_irrelevance_120-9-0") == "group:9"
+
+
+def test_cluster_bootstrap_is_wider_for_clustered_outcomes() -> None:
+    """Outcomes that are identical within a source group carry less information than the same
+    number of independent entries, so the interval must be wider."""
+    from evals.bfcl.metrics import stratified_bootstrap
+
+    def rows(ids: list[str], correct: list[bool]) -> list[dict[str, object]]:
+        return [{"id": i, "category": "c", "correct": k} for i, k in zip(ids, correct, strict=True)]
+
+    def acc(cats):  # type: ignore[no-untyped-def]
+        rs = cats["c"]
+        return {"acc": sum(r["correct"] for r in rs) / len(rs)}
+
+    correct = [g % 2 == 0 for g in range(10) for _ in range(10)]  # 10 groups, all-or-nothing
+    grouped = rows([f"live_c_{g * 10 + k}-{g}-{k}" for g in range(10) for k in range(10)], correct)
+    independent = rows([f"c_{n}" for n in range(100)], correct)
+    lo_g, hi_g = stratified_bootstrap(grouped, acc, 500)["acc"]  # type: ignore[misc]
+    lo_i, hi_i = stratified_bootstrap(independent, acc, 500)["acc"]  # type: ignore[misc]
+    assert hi_g - lo_g > 2 * (hi_i - lo_i)

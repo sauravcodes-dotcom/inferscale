@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -143,6 +144,29 @@ def aggregates(cats: Mapping[str, Sequence[Row]]) -> dict[str, float | None]:
     return out
 
 
+_LIVE_GROUP = re.compile(r"^live_[a-z_]+_\d+-(\d+)-\d+$")
+
+
+def cluster_key(entry_id: str) -> str:
+    """Resampling unit. Live entries from one source conversation (`live_<cat>_<n>-<group>-<k>`)
+    share tool definitions and phrasing, so they are not independent: the split keeps each group
+    in one partition, and the bootstrap resamples whole groups. Other entries are their own unit."""
+    m = _LIVE_GROUP.match(entry_id)
+    return f"group:{m.group(1)}" if m else entry_id
+
+
+def clusters_by_category(rows: Sequence[Row]) -> dict[str, list[list[Row]]]:
+    out: dict[str, dict[str, list[Row]]] = defaultdict(lambda: defaultdict(list))
+    for r in rows:
+        out[r["category"]][cluster_key(r["id"])].append(r)
+    return {c: list(g.values()) for c, g in out.items()}
+
+
+def resample(clusters: Mapping[str, list[list[Row]]], rng: random.Random) -> dict[str, list[Row]]:
+    """One category-stratified cluster bootstrap draw (clusters drawn with replacement)."""
+    return {c: [r for _ in cl for r in cl[rng.randrange(len(cl))]] for c, cl in clusters.items()}
+
+
 def stratified_bootstrap(
     rows: Sequence[Row],
     stat: Callable[[Mapping[str, Sequence[Row]]], dict[str, float | None]],
@@ -150,10 +174,11 @@ def stratified_bootstrap(
     seed: int = 1234,
 ) -> dict[str, list[float] | None]:
     cats = by_category(rows)
+    clusters = clusters_by_category(rows)
     rng = random.Random(seed)
     samples: dict[str, list[float]] = defaultdict(list)
     for _ in range(n_boot):
-        resampled = {c: [rs[rng.randrange(len(rs))] for _ in rs] for c, rs in cats.items()}
+        resampled = resample(clusters, rng)
         for k, v in stat(resampled).items():
             if v is not None:
                 samples[k].append(v)
@@ -190,7 +215,12 @@ def summarize(rows: Sequence[Row], n_boot: int = 1000, seed: int = 1234) -> dict
         "error_classes": dict(errors.most_common()),
         "error_classes_by_category": by_cat_errors,
         "serving_errors": errors.get("serving_error", 0),
-        "bootstrap": {"n_boot": n_boot, "seed": seed, "stratified_by": "category"},
+        "bootstrap": {
+            "n_boot": n_boot,
+            "seed": seed,
+            "stratified_by": "category",
+            "unit": "live source group (live), entry (non-live)",
+        },
     }
 
 

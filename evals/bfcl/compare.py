@@ -17,7 +17,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from evals.bfcl.metrics import Row, aggregates, paired
+from evals.bfcl.metrics import Row, aggregates, cluster_key, paired
 from evals.dataset import ROOT
 
 AGGREGATES = ("non_live_ast", "live", "irrelevance", "live_irrelevance")
@@ -36,8 +36,11 @@ def paired_bootstrap(
     bm = {r["id"]: r for r in b}
     ids = sorted(set(am) & set(bm))
     by_cat: dict[str, list[str]] = defaultdict(list)
+    groups: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
     for i in ids:
         by_cat[am[i]["category"]].append(i)
+        groups[am[i]["category"]][cluster_key(i)].append(i)
+    clusters = {c: list(g.values()) for c, g in groups.items()}
 
     def aggs(sample: dict[str, list[str]], m: dict[str, Row]) -> dict[str, float | None]:
         return aggregates({c: [m[i] for i in v] for c, v in sample.items()})
@@ -46,7 +49,10 @@ def paired_bootstrap(
     rng = random.Random(seed)
     diffs: dict[str, list[float]] = defaultdict(list)
     for _ in range(n_boot):
-        sample = {c: [v[rng.randrange(len(v))] for _ in v] for c, v in by_cat.items()}
+        # Same resampled clusters for both runs (paired), live source groups as units.
+        sample = {
+            c: [i for _ in cl for i in cl[rng.randrange(len(cl))]] for c, cl in clusters.items()
+        }
         ra, rb = aggs(sample, am), aggs(sample, bm)
         for k in AGGREGATES:
             if ra.get(k) is not None and rb.get(k) is not None:

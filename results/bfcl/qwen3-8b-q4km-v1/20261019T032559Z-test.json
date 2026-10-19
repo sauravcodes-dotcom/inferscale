@@ -1,0 +1,307 @@
+{
+ "config": {
+  "adapter_sha256": "61845f964aa5eb54c5ac24149c7d0cc37cbccca8f97ff3ad5151ffd3cea3f086",
+  "bfcl_lock_sha256": "3bdc2e712f27cd5cdd8e30a20a930fdeb24d06a22f935c4c09f28b5b38c6c1da",
+  "config_sha256": "0de0877ca6bdf47b170812033f99bf598a3f2d7735a66fc9562e9a0cf1df9898",
+  "engine": {
+   "build_info": "b11669-620d2225c",
+   "model_path": "/Users/sauravsharma/models/qwen3-8b-gguf/Qwen3-8B-Q4_K_M.gguf",
+   "n_ctx_per_slot": 8192,
+   "total_slots": 2
+  },
+  "engine_profile": "bfcl",
+  "engine_profile_sha256": "383c36151064b4078561298781cae05fcbc5889066cefc34bef80383092f3af7",
+  "serving_profile": "configs/serving/mac-llamacpp-bfcl-gwv.yaml",
+  "serving_profile_sha256": "da3ed6e6f162ae93653e11debce906607e01479123d52a6b0accf972bed9cbc9",
+  "temperature": 0.001
+ },
+ "fingerprint": {
+  "engine": {
+   "build_info": "b11669-620d2225c",
+   "model_path": "/Users/sauravsharma/models/qwen3-8b-gguf/Qwen3-8B-Q4_K_M.gguf",
+   "total_slots": 2
+  },
+  "git": {
+   "dirty": true,
+   "sha": "04747d3f104179e2beca7d7ed70d65904e1e33aa"
+  },
+  "host": {
+   "battery": "-InternalBattery-0 (id=31981667)\t47%; discharging; 0:59 remaining present: true",
+   "chip": "Apple M1 Pro",
+   "macos_version": "26.5",
+   "memory_gb": 16,
+   "os": "Darwin",
+   "power_source": "battery",
+   "python": "3.12.12"
+  },
+  "model": {
+   "engine": "llama.cpp",
+   "engine_version": "b11669",
+   "file": "Qwen3-8B-Q4_K_M.gguf",
+   "hf_repo": "Qwen/Qwen3-8B-GGUF",
+   "hf_revision": "7c41481f57cb95916b40956ab2f0b139b296d974",
+   "quant": "Q4_K_M",
+   "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+   "thinking": false,
+   "version": "qwen3-8b-q4km-v1"
+  },
+  "split": {
+   "categories": [
+    "irrelevance",
+    "live_irrelevance",
+    "live_multiple",
+    "live_parallel",
+    "live_parallel_multiple",
+    "live_relevance",
+    "live_simple",
+    "multiple",
+    "parallel",
+    "parallel_multiple",
+    "simple_java",
+    "simple_javascript",
+    "simple_python"
+   ],
+   "file": "splits/bfcl_v4_single_turn_v1.json",
+   "ids_sha256": "c0e9c8716bd0aa2ef704b3ed89b56085632a1b5ca1397f091c7f6b36cab348c7",
+   "sha256": "cfeadb3a38e041e06d24f52d47482fd076d65e403683fb0da6de599de11fbf24"
+  }
+ },
+ "label": "held-out test (final)",
+ "partition": "test",
+ "quality": {
+  "bootstrap": {
+   "n_boot": 1000,
+   "seed": 1234,
+   "stratified_by": "category"
+  },
+  "error_classes": {
+   "called_when_irrelevant": 226,
+   "no_call_when_relevant": 3,
+   "serving_error": 4,
+   "undecodable_output": 26,
+   "wrong_arguments": 281,
+   "wrong_call_count": 34,
+   "wrong_call_set": 28,
+   "wrong_function": 29
+  },
+  "error_classes_by_category": {
+   "irrelevance": {
+    "called_when_irrelevant": 31
+   },
+   "live_irrelevance": {
+    "called_when_irrelevant": 195,
+    "serving_error": 4
+   },
+   "live_multiple": {
+    "undecodable_output": 14,
+    "wrong_arguments": 169,
+    "wrong_call_count": 17,
+    "wrong_function": 28
+   },
+   "live_parallel": {
+    "undecodable_output": 2,
+    "wrong_call_set": 4
+   },
+   "live_parallel_multiple": {
+    "wrong_call_count": 2,
+    "wrong_call_set": 3
+   },
+   "live_relevance": {
+    "no_call_when_relevant": 3
+   },
+   "live_simple": {
+    "undecodable_output": 7,
+    "wrong_arguments": 53
+   },
+   "multiple": {
+    "undecodable_output": 2,
+    "wrong_arguments": 5,
+    "wrong_call_count": 2,
+    "wrong_function": 1
+   },
+   "parallel": {
+    "undecodable_output": 1,
+    "wrong_call_count": 10,
+    "wrong_call_set": 7
+   },
+   "parallel_multiple": {
+    "wrong_call_count": 3,
+    "wrong_call_set": 14
+   },
+   "simple_java": {
+    "wrong_arguments": 33
+   },
+   "simple_javascript": {
+    "wrong_arguments": 10
+   },
+   "simple_python": {
+    "wrong_arguments": 11
+   }
+  },
+  "metrics": {
+   "irrelevance": {
+    "ci95": [
+     0.810185,
+     0.902778
+    ],
+    "n": 216,
+    "value": 0.856481
+   },
+   "live": {
+    "ci95": [
+     0.731925,
+     0.780666
+    ],
+    "n": null,
+    "value": 0.757108
+   },
+   "live_irrelevance": {
+    "ci95": [
+     0.719849,
+     0.778894
+    ],
+    "n": 796,
+    "value": 0.75
+   },
+   "live_multiple": {
+    "ci95": [
+     0.731013,
+     0.78692
+    ],
+    "n": 948,
+    "value": 0.759494
+   },
+   "live_parallel": {
+    "ci95": [
+     0.375,
+     0.875
+    ],
+    "n": 16,
+    "value": 0.625
+   },
+   "live_parallel_multiple": {
+    "ci95": [
+     0.625,
+     0.916667
+    ],
+    "n": 24,
+    "value": 0.791667
+   },
+   "live_relevance": {
+    "ci95": [
+     0.625,
+     1.0
+    ],
+    "n": 16,
+    "value": 0.8125
+   },
+   "live_simple": {
+    "ci95": [
+     0.699588,
+     0.806584
+    ],
+    "n": 243,
+    "value": 0.753086
+   },
+   "multiple": {
+    "ci95": [
+     0.911111,
+     0.977778
+    ],
+    "n": 180,
+    "value": 0.944444
+   },
+   "non_live_ast": {
+    "ci95": [
+     0.865741,
+     0.907639
+    ],
+    "n": null,
+    "value": 0.88588
+   },
+   "non_live_simple": {
+    "ci95": [
+     0.737963,
+     0.841667
+    ],
+    "n": null,
+    "value": 0.793519
+   },
+   "parallel": {
+    "ci95": [
+     0.855556,
+     0.944444
+    ],
+    "n": 180,
+    "value": 0.9
+   },
+   "parallel_multiple": {
+    "ci95": [
+     0.861111,
+     0.95
+    ],
+    "n": 180,
+    "value": 0.905556
+   },
+   "simple_java": {
+    "ci95": [
+     0.533333,
+     0.733333
+    ],
+    "n": 90,
+    "value": 0.633333
+   },
+   "simple_javascript": {
+    "ci95": [
+     0.644444,
+     0.888889
+    ],
+    "n": 45,
+    "value": 0.777778
+   },
+   "simple_python": {
+    "ci95": [
+     0.95,
+     0.986111
+    ],
+    "n": 360,
+    "value": 0.969444
+   }
+  },
+  "n": 3294,
+  "serving_errors": 4
+ },
+ "raw_dir": "results/bfcl/raw/20261019T032559Z-test",
+ "run_id": "20261019T032559Z-test",
+ "run_kind": "full",
+ "serving": {
+  "e2e_latency_s": {
+   "mean": 3.709813922516843,
+   "p50": 2.884541869163513,
+   "p95": 8.90829430818558
+  },
+  "engine_prompt_tokens_total_after": 1043300.0,
+  "entries": 3294,
+  "gateway_ttft": {
+   "mean_s": 3.707391961640429,
+   "n": 3290,
+   "note": "quantiles are histogram bucket upper bounds",
+   "p50_le_s": 3.0,
+   "p95_le_s": 10.0
+  },
+  "input_tokens_total": 2185394,
+  "memory_validity": {
+   "reason": "swap grew 337.9 MB (> 32 MB)",
+   "swap_growth_mb": 337.94,
+   "swap_max_mb": 337.94,
+   "swap_start_mb": 0.0,
+   "threshold_mb": 32.0,
+   "valid": false
+  },
+  "output_tokens_total": 186009,
+  "peak_engine_rss_bytes": 9493708800,
+  "wall_s": 12215.9
+ },
+ "started_at": "2026-10-19T03:25:59+00:00",
+ "task": "bfcl_v4_single_turn"
+}
