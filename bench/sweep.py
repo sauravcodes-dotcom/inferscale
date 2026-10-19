@@ -66,6 +66,9 @@ class Sweep(_Strict):
     serving_profile: str = "configs/serving/mac-llamacpp-bfcl-gwv.yaml"
     engine_start_timeout_s: float = 240.0
     settle_s: float = Field(default=30.0, ge=0)  # idle time after the engine is up
+    # Gateway env for every variant (a variant's gateway_env wins), e.g. a long queue timeout so
+    # concurrency above the slot count measures queueing delay instead of shedding.
+    gateway_env: dict[str, str] = Field(default_factory=dict)
     restart_per_run: bool = True  # cold engine (empty caches) for every level x repeat
     # KV cache bytes per context token, for the computed KV column (this llama.cpp build does
     # not log buffer sizes). Qwen3-8B, f16 cache: 36 layers x 8 KV heads x 128 x (K+V) x 2 B.
@@ -96,7 +99,7 @@ def gateway_env(sweep: Sweep, v: Variant) -> dict[str, str]:
     env = {"INFERSCALE_ADMISSION__MAX_INFLIGHT": slots}
     if v.model_version:
         env["INFERSCALE_ACTIVE_MODEL"] = v.model_version
-    return {**env, **v.gateway_env}
+    return {**env, **sweep.gateway_env, **v.gateway_env}
 
 
 def model_mismatch(v: Variant, props: dict[str, Any] | None) -> str | None:
@@ -195,24 +198,12 @@ async def run_variant(
     }
 
 
-async def run_sweep(sweep: Sweep, exp: Experiment, only: list[str] | None) -> dict[str, Any]:
-    started = datetime.now(UTC)
-    stamp = started.strftime("%Y%m%dT%H%M%SZ")
-    procs = Procs()
-    out: list[dict[str, Any]] = []
-    try:
-        for v in sweep.variants:
-            if only and v.name not in only:
-                continue
-            print(f"== variant {v.name}: {v.engine_env}", file=sys.stderr)
-            out.append(await run_variant(sweep, exp, v, procs, stamp))
-            if out[-1]["skipped"]:
-                print(f"   skipped: {out[-1]['log_tail']}", file=sys.stderr)
-            elif exp.cooldown_s:
-                await asyncio.sleep(exp.cooldown_s)
-    finally:
-        procs.stop_all()
-    ran = [v for v in out if not v["skipped"]]
+def sweep_result(
+    sweep: Sweep, exp: Experiment, started: datetime, variants: list[dict[str, Any]]
+) -> dict[str, Any]:
+    ran = [v for v in variants if not v["skipped"]]
+    done = {v["variant"]["name"] for v in variants}
+    wanted = [v.name for v in sweep.variants]
     return {
         "sweep": sweep.model_dump(),
         "experiment": exp.model_dump(),
@@ -220,9 +211,40 @@ async def run_sweep(sweep: Sweep, exp: Experiment, only: list[str] | None) -> di
         "started_at": started.isoformat(timespec="seconds"),
         "finished_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "git": git_state(),
+        "complete": all(n in done for n in wanted),
         "valid": bool(ran) and all(v["result"]["valid"] for v in ran),
-        "variants": out,
+        "variants": variants,
     }
+
+
+async def run_sweep(
+    sweep: Sweep,
+    exp: Experiment,
+    only: list[str] | None,
+    out: Path,
+    previous: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Runs the variants, rewriting `out` after each one so an interrupted sweep keeps what it
+    finished; `previous` (an interrupted result) supplies variants that are already done."""
+    started = datetime.fromisoformat(previous["started_at"]) if previous else datetime.now(UTC)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    done: list[dict[str, Any]] = list(previous["variants"]) if previous else []
+    procs = Procs()
+    try:
+        for v in sweep.variants:
+            if (only and v.name not in only) or v.name in {d["variant"]["name"] for d in done}:
+                continue
+            print(f"== variant {v.name}: {v.engine_env}", file=sys.stderr)
+            done.append(await run_variant(sweep, exp, v, procs, stamp))
+            partial = json.dumps(sweep_result(sweep, exp, started, done), default=str) + "\n"
+            await asyncio.to_thread(out.write_text, partial)  # keep finished variants
+            if done[-1]["skipped"]:
+                print(f"   skipped: {done[-1]['log_tail']}", file=sys.stderr)
+            elif exp.cooldown_s:
+                await asyncio.sleep(exp.cooldown_s)
+    finally:
+        procs.stop_all()
+    return sweep_result(sweep, exp, started, done)
 
 
 def _f(v: float | None, fmt: str) -> str:
@@ -288,6 +310,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--force-dirty-env", action="store_true")
     ap.add_argument("--only", nargs="*", help="run only these variants")
     ap.add_argument("--out-root", type=Path, default=ROOT / "results" / "bench")
+    ap.add_argument("--resume", type=Path, help="continue an interrupted sweep result file")
     args = ap.parse_args(argv)
     sweep = load_sweep(args.config)
     exp = load_experiment(ROOT / sweep.experiment)
@@ -298,11 +321,14 @@ def main(argv: list[str] | None = None) -> int:
     if blocking:
         print("refusing to start; fix the above or pass --force-dirty-env", file=sys.stderr)
         return 2
-    res = asyncio.run(run_sweep(sweep, exp, args.only))
-    res["preflight"] = {"warnings": reasons, "forced": bool(reasons) and exp.preflight.enforce}
+    previous = json.loads(args.resume.read_text()) if args.resume else None
+    if previous and previous["sweep"]["name"] != sweep.name:
+        raise SystemExit(f"{args.resume} is not a result of sweep {sweep.name}")
     out_dir = args.out_root / sweep.name
     out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / f"{datetime.fromisoformat(res['started_at']).strftime('%Y%m%dT%H%M%SZ')}.json"
+    out = args.resume or out_dir / f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    res = asyncio.run(run_sweep(sweep, exp, args.only, out, previous))
+    res["preflight"] = {"warnings": reasons, "forced": bool(reasons) and exp.preflight.enforce}
     out.write_text(json.dumps(res, default=str) + "\n")
     report = ROOT / sweep.report
     report.parent.mkdir(parents=True, exist_ok=True)

@@ -8,6 +8,11 @@ description: |
 experiment: configs/experiments/bfcl_latency.yaml
 engine_profile: bfcl
 report: reports/m43_slots.md
+# Queue long instead of shedding: with concurrency > slots we want the queueing delay. (The
+# first attempt used the 10 s default: 16 queue_timeout 429s at slots=1, concurrency=2.)
+gateway_env:
+  INFERSCALE_ADMISSION__QUEUE_TIMEOUT_S: "600"
+  INFERSCALE_ADMISSION__MAX_QUEUE: "16"
 variants:
   - {name: slots1, engine_env: {ENGINE_PARALLEL: "1", ENGINE_CTX: "8192"}, concurrency: [1, 2]}
   - {name: slots2, engine_env: {ENGINE_PARALLEL: "2", ENGINE_CTX: "16384"}, concurrency: [1, 2, 4]}

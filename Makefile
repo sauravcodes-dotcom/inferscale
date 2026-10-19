@@ -90,7 +90,10 @@ bfcl-requests:
 	tools/bfcl/.venv/bin/python tools/bfcl/export_requests.py --partition dev
 
 # Clean environment required (restart, AC, no browsers). Order matters: the cache sweep's 8 GiB
-# variant is expected to swap, so it runs last. ~4.5 h in total.
+# variant is expected to swap, so it runs last. ~4.5 h in total. Start it with
+#   uv run python scripts/detach.py logs/m43-run.log -- make m43
+# so it survives the launching session; an interrupted sweep continues with
+#   uv run python -m bench.sweep <config> --resume results/bench/<sweep>/<ts>.json
 m43: bfcl-requests
 	uv run python -m bench.sweep configs/sweeps/m43_slots.yaml
 	uv run python -m bench.sweep configs/sweeps/m43_quant.yaml

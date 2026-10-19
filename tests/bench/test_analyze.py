@@ -90,3 +90,12 @@ def test_missing_fields_stay_none() -> None:
     )
     assert m["ttft_s"]["p50"] is None and m["decode_tok_s"]["p50"] is None
     assert m["ttft_s"]["p50_ci95"] is None
+
+
+def test_decode_rate_ignores_buffered_responses() -> None:
+    from bench.analyze import decode_rate
+
+    streamed = {"completion_tokens": 5, "delta_ts": [0.0, 0.1, 0.2, 0.3, 0.4]}
+    buffered = {"completion_tokens": 40, "delta_ts": [1.0, 1.00001, 1.00002]}
+    assert decode_rate(streamed) == pytest.approx(10.0)
+    assert decode_rate(buffered) is None

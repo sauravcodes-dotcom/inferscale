@@ -59,13 +59,22 @@ def itls(r: Rec) -> list[float]:
     return [b - a for a, b in itertools.pairwise(ts)]
 
 
+MAX_PLAUSIBLE_DECODE_TOK_S = 1000.0
+
+
 def decode_rate(r: Rec) -> float | None:
     ts = r.get("delta_ts") or []
     n = r.get("completion_tokens")
     if n is None or n < 2 or len(ts) < 2:
         return None
     span = ts[-1] - ts[0]
-    return (n - 1) / span if span > 0 else None
+    if span <= 0:
+        return None
+    rate = (n - 1) / span
+    # Only meaningful when tokens were streamed as generated. A buffered response (the gateway's
+    # validated tool-call mode sends everything after validation) arrives in chunks microseconds
+    # apart and would read as millions of tokens/s; no single request decodes that fast here.
+    return rate if rate <= MAX_PLAUSIBLE_DECODE_TOK_S else None
 
 
 def measured(records: Sequence[Rec]) -> list[Rec]:

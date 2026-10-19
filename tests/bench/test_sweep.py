@@ -140,3 +140,27 @@ def test_model_version_reaches_gateway_and_is_checked_against_engine() -> None:
         model_mismatch(v, {"model_path": "/m/Qwen3-8B-Q4_K_M.gguf"}) or ""
     )
     assert model_mismatch(Variant(name="d"), None) is not None  # unknown engine model: refuse
+
+
+def test_sweep_gateway_env_applies_to_all_variants() -> None:
+    s = sweep(Variant(name="a"), Variant(name="b", gateway_env={"X": "variant"}))
+    s = s.model_copy(
+        update={"gateway_env": {"INFERSCALE_ADMISSION__QUEUE_TIMEOUT_S": "600", "X": "sweep"}}
+    )
+    assert gateway_env(s, s.variants[0])["INFERSCALE_ADMISSION__QUEUE_TIMEOUT_S"] == "600"
+    assert gateway_env(s, s.variants[1])["X"] == "variant"
+
+
+async def test_resume_skips_finished_variants_and_saves_progress(tmp_path: Path) -> None:
+    from bench.run_experiment import Experiment
+    from bench.sweep import run_sweep
+
+    s = sweep(Variant(name="done"))
+    exp = Experiment(name="e", smoke=True)
+    prev = {
+        "started_at": "2026-10-19T00:00:00+00:00",
+        "variants": [{"variant": {"name": "done"}, "skipped": True}],
+    }
+    out = tmp_path / "r.json"
+    res = await run_sweep(s, exp, None, out, prev)  # nothing left to run: no processes started
+    assert res["complete"] and [v["variant"]["name"] for v in res["variants"]] == ["done"]
