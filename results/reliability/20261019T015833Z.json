@@ -1,0 +1,134 @@
+{
+ "all_pass": false,
+ "fingerprint": {
+  "git": {
+   "dirty": true,
+   "sha": "fb3720fb86901d1e71b21bed28f14a5280ce5e67"
+  },
+  "host": {
+   "battery": "-InternalBattery-0 (id=25034851)\t82%; charging; 0:51 remaining present: true",
+   "chip": "Apple M1 Pro",
+   "macos_version": "26.5",
+   "memory_gb": 16,
+   "os": "Darwin",
+   "power_source": "AC",
+   "python": "3.12.12"
+  }
+ },
+ "scenarios": {
+  "deadline": {
+   "checks": [
+    {
+     "check": "504 deadline_exceeded",
+     "detail": [
+      504,
+      "deadline_exceeded"
+     ],
+     "pass": true
+    },
+    {
+     "check": "returned close to the 2 s deadline (< 4 s)",
+     "detail": 2.0,
+     "pass": true
+    },
+    {
+     "check": "engine slot released within 10 s (upstream cancelled)",
+     "detail": null,
+     "pass": false
+    }
+   ],
+   "duration_s": 13.4,
+   "elapsed_s": 2.0,
+   "engine_idle_after_s": null,
+   "error_code": "deadline_exceeded",
+   "pass": false,
+   "status": 504
+  },
+  "overload": {
+   "checks": [
+    {
+     "check": "some requests were shed with 429",
+     "detail": {
+      "200": 9,
+      "429": 81
+     },
+     "pass": true
+    },
+    {
+     "check": "no 5xx responses",
+     "detail": {
+      "200": 9,
+      "429": 81
+     },
+     "pass": true
+    },
+    {
+     "check": "queue_full 429s are immediate (p95 < 0.5 s)",
+     "detail": {
+      "n": 44,
+      "p95_s": 0.0040877499995986
+     },
+     "pass": true
+    },
+    {
+     "check": "queue_timeout 429s arrive at the 5 s queue timeout (4.5-6.5 s)",
+     "detail": {
+      "max_s": 5.011107999999695,
+      "min_s": 5.002247542000077,
+      "n": 11
+     },
+     "pass": true
+    },
+    {
+     "check": "429 responses carry Retry-After",
+     "detail": [
+      "1",
+      "1",
+      "1",
+      "1",
+      "1"
+     ],
+     "pass": true
+    },
+    {
+     "check": "engine never exceeded its 2 slots",
+     "detail": 2.0,
+     "pass": true
+    },
+    {
+     "check": "queue depth never exceeded its bound (4)",
+     "detail": 4.0,
+     "pass": true
+    },
+    {
+     "check": "admitted requests completed",
+     "detail": 9,
+     "pass": true
+    }
+   ],
+   "duration_s": 36.3,
+   "load": {
+    "duration_s": 30.0,
+    "max_tokens": 96,
+    "rate_rps": 3.0,
+    "requests": 90
+   },
+   "max_engine_processing": 2.0,
+   "max_queue_depth": 4.0,
+   "pass": true,
+   "rejected_delta": {
+    "reason=\"queue_full\"": 65.0,
+    "reason=\"queue_timeout\"": 16.0
+   },
+   "rejections_by_code": {
+    "queue_full": 44,
+    "queue_timeout": 11
+   },
+   "statuses": {
+    "200": 9,
+    "429": 81
+   }
+  }
+ },
+ "started_at": "2026-10-19T01:58:33+00:00"
+}

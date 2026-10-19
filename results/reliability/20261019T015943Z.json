@@ -1,0 +1,49 @@
+{
+ "all_pass": false,
+ "fingerprint": {
+  "git": {
+   "dirty": true,
+   "sha": "fb3720fb86901d1e71b21bed28f14a5280ce5e67"
+  },
+  "host": {
+   "battery": "-InternalBattery-0 (id=25034851)\t83%; charging; 0:51 remaining present: true",
+   "chip": "Apple M1 Pro",
+   "macos_version": "26.5",
+   "memory_gb": 16,
+   "os": "Darwin",
+   "power_source": "AC",
+   "python": "3.12.12"
+  }
+ },
+ "scenarios": {
+  "deadline": {
+   "checks": [
+    {
+     "check": "504 deadline_exceeded",
+     "detail": [
+      504,
+      "deadline_exceeded"
+     ],
+     "pass": true
+    },
+    {
+     "check": "returned close to the 2 s deadline (< 4 s)",
+     "detail": 2.01,
+     "pass": true
+    },
+    {
+     "check": "engine slot released within 10 s (upstream cancelled)",
+     "detail": 29.51309533299991,
+     "pass": false
+    }
+   ],
+   "duration_s": 34.5,
+   "elapsed_s": 2.01,
+   "engine_idle_after_s": 29.51,
+   "error_code": "deadline_exceeded",
+   "pass": false,
+   "status": 504
+  }
+ },
+ "started_at": "2026-10-19T01:59:43+00:00"
+}

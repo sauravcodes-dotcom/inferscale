@@ -1,0 +1,121 @@
+{
+ "all_pass": false,
+ "fingerprint": {
+  "git": {
+   "dirty": true,
+   "sha": "fb3720fb86901d1e71b21bed28f14a5280ce5e67"
+  },
+  "host": {
+   "battery": "-InternalBattery-0 (id=25034851)\t81%; charging; 0:51 remaining present: true",
+   "chip": "Apple M1 Pro",
+   "macos_version": "26.5",
+   "memory_gb": 16,
+   "os": "Darwin",
+   "power_source": "AC",
+   "python": "3.12.12"
+  }
+ },
+ "scenarios": {
+  "deadline": {
+   "checks": [
+    {
+     "check": "504 deadline_exceeded",
+     "detail": [
+      400,
+      "invalid_request"
+     ],
+     "pass": false
+    },
+    {
+     "check": "returned close to the 2 s deadline (< 4 s)",
+     "detail": 0.0,
+     "pass": true
+    },
+    {
+     "check": "engine slot released within 10 s (upstream cancelled)",
+     "detail": 0.006091833999562368,
+     "pass": true
+    }
+   ],
+   "duration_s": 1.3,
+   "elapsed_s": 0.0,
+   "engine_idle_after_s": 0.01,
+   "error_code": "invalid_request",
+   "pass": false,
+   "status": 400
+  },
+  "overload": {
+   "checks": [
+    {
+     "check": "some requests were shed with 429",
+     "detail": {
+      "200": 8,
+      "429": 82
+     },
+     "pass": true
+    },
+    {
+     "check": "no 5xx responses",
+     "detail": {
+      "200": 8,
+      "429": 82
+     },
+     "pass": true
+    },
+    {
+     "check": "429s are immediate (p95 < 0.5 s)",
+     "detail": {
+      "max_s": 5.009055042,
+      "n": 56
+     },
+     "pass": false
+    },
+    {
+     "check": "429 responses carry Retry-After",
+     "detail": [
+      "1",
+      "1",
+      "1",
+      "1",
+      "1"
+     ],
+     "pass": true
+    },
+    {
+     "check": "engine never exceeded its 2 slots",
+     "detail": 2.0,
+     "pass": true
+    },
+    {
+     "check": "queue depth never exceeded its bound (4)",
+     "detail": 4.0,
+     "pass": true
+    },
+    {
+     "check": "admitted requests completed",
+     "detail": 8,
+     "pass": true
+    }
+   ],
+   "duration_s": 32.4,
+   "load": {
+    "duration_s": 30.0,
+    "max_tokens": 96,
+    "rate_rps": 3.0,
+    "requests": 90
+   },
+   "max_engine_processing": 2.0,
+   "max_queue_depth": 4.0,
+   "pass": false,
+   "rejected_delta": {
+    "reason=\"queue_full\"": 66.0,
+    "reason=\"queue_timeout\"": 16.0
+   },
+   "statuses": {
+    "200": 8,
+    "429": 82
+   }
+  }
+ },
+ "started_at": "2026-10-19T01:57:44+00:00"
+}
