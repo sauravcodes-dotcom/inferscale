@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from inferscale.config import LimitsConfig
 from inferscale.core.errors import InvalidRequestError
@@ -136,9 +136,16 @@ class ChatCompletionRequest(_Strict):
     stream: bool = False
     stream_options: StreamOptions | None = None
     response_format: ResponseFormat | None = None
-    tools: list[Tool] | None = Field(default=None, min_length=1)
+    tools: list[Tool] | None = None
     tool_choice: Literal["none", "auto", "required"] | NamedToolChoice | None = None
     parallel_tool_calls: bool | None = None
+
+    @field_validator("tools")
+    @classmethod
+    def _empty_tools_is_none(cls, v: list[Tool] | None) -> list[Tool] | None:
+        # Some clients send `tools: []` for "no tools" (BFCL's Qwen handler does for entries with
+        # no functions). OpenAI rejects it; we treat it as absent, so tool_choice still needs tools.
+        return v or None
 
     @model_validator(mode="after")
     def _tools_consistent(self) -> ChatCompletionRequest:

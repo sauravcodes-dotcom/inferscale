@@ -38,7 +38,6 @@ def test_full_request_is_valid() -> None:
 @pytest.mark.parametrize(
     "kw",
     [
-        {"tools": []},  # unknown field
         {"temperature": 2.5},
         {"temperature": -0.1},
         {"top_p": 0},
@@ -168,7 +167,7 @@ def test_tool_round_trip_messages_are_valid() -> None:
     [
         ({"tool_choice": "required"}, MSG),  # tool_choice without tools
         ({"parallel_tool_calls": True}, MSG),
-        ({"tools": []}, MSG),
+        ({"tools": [], "tool_choice": "required"}, MSG),  # [] means no tools
         ({"tools": [{**WEATHER_TOOL, "type": "code"}]}, MSG),
         ({"tools": [{"type": "function", "function": {"name": "bad name"}}]}, MSG),
         (
@@ -219,3 +218,9 @@ def test_tool_limits() -> None:
         ChatCompletionRequest.model_validate(
             {"messages": [{"role": "assistant", "tool_calls": [call]}]}
         ).check_limits(limits)
+
+
+def test_empty_tools_means_no_tools() -> None:
+    req = ChatCompletionRequest(messages=MSG, tools=[])
+    assert req.tools is None
+    assert "tools" not in req.to_engine_payload(LimitsConfig())
