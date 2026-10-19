@@ -111,10 +111,31 @@ Dev results (347 entries, official scorer, %):
 | **gateway_validated** (frozen) | 87.08 | 84.17 | 75.0 | 79.55 |
 | published Qwen3-8B (FC), full set | 87.58 | 80.53 | | |
 
-`gateway_validated` vs `engine`: live +9.17 points, 95% CI [+5.0, +15.0]. The whole difference
-is in `live_multiple`: 11 entries are fixed and 0 are broken (exact McNemar p = 0.001). No other
-category changes. Dev numbers guided the choice of mode, so they are not a final result. The
-held-out test has not been run.
+`gateway_validated` vs `engine` on dev: 11 `live_multiple` entries fixed and 0 broken (exact
+McNemar p = 0.001); no other category changes. Dev numbers guided the choice of mode.
+
+**Held-out test** (3,294 entries, run once with the frozen config, official scorer; 95% CIs
+resample live source groups; `results/bfcl/qwen3-8b-q4km-v1/heldout-report-*.json`):
+
+| | dev (347) | **test (3,294)** | published Qwen3-8B (FC) |
+|---|---|---|---|
+| non-live AST | 87.08 [79.6, 93.5] | **88.59** [86.3, 90.7] | 87.58 |
+| live AST | 84.17 [75.9, 91.2] | **75.71** [71.7, 79.7] | 80.53 |
+| irrelevance | 75.00 [58.3, 91.7] | **85.65** [81.0, 90.3] | |
+| live irrelevance | 79.55 [67.9, 88.6] | **75.50** [69.7, 81.2] | |
+
+- Non-live matches the published model. Live is about 5 points below it. The published numbers
+  are probably for the full-precision model with thinking enabled; this run is Q4_K_M with
+  thinking off. Of 299 live failures, 222 are wrong arguments, 138 of them `value_error:string`
+  (for example "New York City, NY" vs the accepted "New York, NY"), where the dev audit found
+  label strictness as well as model errors.
+- Dev overstated live accuracy. Dev `live_multiple` is 105 entries from only 26 source
+  conversations, and the bootstrap originally resampled entries, giving a CI that was too
+  narrow ([80.0, 92.4]; by group [76.9, 93.8]). CIs now resample source groups.
+- Four entries (`live_irrelevance_120-123`) have no functions; the gateway rejected their
+  `tools: []` (fixed afterwards). BFCL counts them correct; counted wrong, live irrelevance is
+  75.00. 44 responses hit the gateway's 256-token default `max_tokens` (BFCL sets none); at most
+  +0.24 live. Swap grew 338 MB during the run, so its latency figures are flagged invalid.
 
 **Label quality.** Every one of the 57 dev failures of the frozen config was reviewed against the
 tool schema and BFCL's possible answers (`results/bfcl/audit/`): 35 model errors, 8 label
@@ -212,6 +233,6 @@ are written to the git-ignored `results/bfcl/raw/`.
 ## Status
 
 - Gateway, tool-call modes and reliability suite: implemented and validated (26/26).
-- BFCL: dev results above; the held-out test (3,294 entries, frozen config) has not been run yet.
+- BFCL: held-out test run once with the frozen config (results above).
 - Serving sweeps: tooling done, runs pending a clean environment.
 - PAG: dev-split numbers are for prompt development only; its held-out test has not been run.
