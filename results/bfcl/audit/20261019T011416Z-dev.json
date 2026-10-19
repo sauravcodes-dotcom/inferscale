@@ -1,0 +1,259 @@
+{
+ "run_id": "20261019T011416Z-dev",
+ "auditor": "Claude (InferScale), manual review of every failure against the tool schema and BFCL possible answers",
+ "n_failures": 57,
+ "verdict_counts": {
+  "model_error": 35,
+  "label_error": 8,
+  "ambiguous": 14
+ },
+ "sensitivity_if_label_errors_counted_correct": {
+  "non_live_ast": {
+   "official": 0.8708,
+   "adjusted": 0.925
+  },
+  "live": {
+   "official": 0.8417,
+   "adjusted": 0.8583
+  },
+  "irrelevance": {
+   "official": 0.75,
+   "adjusted": 0.75
+  },
+  "live_irrelevance": {
+   "official": 0.7955,
+   "adjusted": 0.7955
+  }
+ },
+ "note": "Headline numbers are always the official scorer's. This audit only bounds how much label strictness affects them.",
+ "verdicts": {
+  "irrelevance_165": {
+   "verdict": "ambiguous",
+   "note": "calling the available tool is a reasonable reading of the request"
+  },
+  "irrelevance_180": {
+   "verdict": "ambiguous",
+   "note": "calling the available tool is a reasonable reading of the request"
+  },
+  "irrelevance_193": {
+   "verdict": "ambiguous",
+   "note": "tool only partially matches the request (roster vs top scorer, grocery vs bakery)"
+  },
+  "irrelevance_22": {
+   "verdict": "model_error",
+   "note": "calls a tool with invented values for required information the user did not give (should not call / ask)"
+  },
+  "irrelevance_223": {
+   "verdict": "ambiguous",
+   "note": "tool only partially matches the request (roster vs top scorer, grocery vs bakery)"
+  },
+  "irrelevance_236": {
+   "verdict": "ambiguous",
+   "note": "calling the available tool is a reasonable reading of the request"
+  },
+  "live_irrelevance_214-34-3": {
+   "verdict": "model_error",
+   "note": "searches when the request (restock) is not supported by the tool"
+  },
+  "live_irrelevance_218-34-7": {
+   "verdict": "ambiguous",
+   "note": "calling the available tool is a reasonable reading of the request"
+  },
+  "live_irrelevance_229-36-0": {
+   "verdict": "model_error",
+   "note": "calls a tool with invented values for required information the user did not give (should not call / ask)"
+  },
+  "live_irrelevance_252-53-0": {
+   "verdict": "model_error",
+   "note": "calls a tool with invented values for required information the user did not give (should not call / ask)"
+  },
+  "live_irrelevance_413-93-0": {
+   "verdict": "model_error",
+   "note": "fabricates an API URL/host the user never provided"
+  },
+  "live_irrelevance_414-93-1": {
+   "verdict": "model_error",
+   "note": "fabricates an API URL/host the user never provided"
+  },
+  "live_irrelevance_449-118-0": {
+   "verdict": "model_error",
+   "note": "calls a tool with invented values for required information the user did not give (should not call / ask)"
+  },
+  "live_irrelevance_477-134-1": {
+   "verdict": "ambiguous",
+   "note": "calling the available tool is a reasonable reading of the request"
+  },
+  "live_irrelevance_502-147-0": {
+   "verdict": "ambiguous",
+   "note": "calling the available tool is a reasonable reading of the request"
+  },
+  "live_irrelevance_511-151-0": {
+   "verdict": "model_error",
+   "note": "fabricates an API URL/host the user never provided"
+  },
+  "live_irrelevance_512-151-1": {
+   "verdict": "model_error",
+   "note": "fabricates an API URL/host the user never provided"
+  },
+  "live_irrelevance_598-193-0": {
+   "verdict": "model_error",
+   "note": "calls a tool with invented values for required information the user did not give (should not call / ask)"
+  },
+  "live_irrelevance_602-193-4": {
+   "verdict": "model_error",
+   "note": "calls a tool with invented values for required information the user did not give (should not call / ask)"
+  },
+  "live_irrelevance_603-193-5": {
+   "verdict": "model_error",
+   "note": "calls a tool with invented values for required information the user did not give (should not call / ask)"
+  },
+  "live_irrelevance_606-193-8": {
+   "verdict": "model_error",
+   "note": "calls a tool with invented values for required information the user did not give (should not call / ask)"
+  },
+  "live_irrelevance_655-207-0": {
+   "verdict": "model_error",
+   "note": "calls a tool with invented values for required information the user did not give (should not call / ask)"
+  },
+  "live_irrelevance_880-365-0": {
+   "verdict": "model_error",
+   "note": "calls a tool with invented values for required information the user did not give (should not call / ask)"
+  },
+  "live_irrelevance_881-366-0": {
+   "verdict": "model_error",
+   "note": "calls a tool with invented values for required information the user did not give (should not call / ask)"
+  },
+  "live_multiple_1024-253-0": {
+   "verdict": "model_error",
+   "note": "answers in text / asks for clarification where a provided tool fits"
+  },
+  "live_multiple_1044-271-0": {
+   "verdict": "label_error",
+   "note": "model follows the schema example 'New York, NY'; ground truth accepts only 'Chicago'"
+  },
+  "live_multiple_362-134-7": {
+   "verdict": "model_error",
+   "note": "ignores a stated constraint (genre Action -> dontcare)"
+  },
+  "live_multiple_385-137-3": {
+   "verdict": "model_error",
+   "note": "violates the documented 'City, ST' format"
+  },
+  "live_multiple_388-137-6": {
+   "verdict": "model_error",
+   "note": "violates the documented 'City, ST' format"
+  },
+  "live_multiple_525-151-1": {
+   "verdict": "model_error",
+   "note": "relative-date arithmetic wrong"
+  },
+  "live_multiple_528-151-4": {
+   "verdict": "model_error",
+   "note": "invents a date for 'today' instead of leaving the optional field unset"
+  },
+  "live_multiple_660-162-2": {
+   "verdict": "ambiguous",
+   "note": "'a music concert or a play': one call per event type is defensible"
+  },
+  "live_multiple_666-162-8": {
+   "verdict": "ambiguous",
+   "note": "'a music concert or a play': one call per event type is defensible"
+  },
+  "live_multiple_670-162-12": {
+   "verdict": "ambiguous",
+   "note": "prompt says 2023-10-01 is a Monday (it was a Sunday); 'next Monday' is ill-defined"
+  },
+  "live_multiple_671-162-13": {
+   "verdict": "model_error",
+   "note": "relative-date arithmetic wrong"
+  },
+  "live_multiple_673-162-15": {
+   "verdict": "model_error",
+   "note": "relative-date arithmetic wrong"
+  },
+  "live_multiple_674-162-16": {
+   "verdict": "ambiguous",
+   "note": "'movie theater events' vs the dataset's Theater (plays) category"
+  },
+  "live_multiple_950-199-1": {
+   "verdict": "label_error",
+   "note": "schema explicitly allows 'HH:MM AM/PM'; ground truth accepts only '23:00'"
+  },
+  "live_multiple_964-207-0": {
+   "verdict": "model_error",
+   "note": "answers in text / asks for clarification where a provided tool fits"
+  },
+  "live_simple_108-65-0": {
+   "verdict": "model_error",
+   "note": "wrong classification of items into lists"
+  },
+  "live_simple_124-80-0": {
+   "verdict": "model_error",
+   "note": "mistranslates 'unresolved' (未解决) as status=resolved"
+  },
+  "live_simple_257-137-1": {
+   "verdict": "model_error",
+   "note": "answers in text / asks for clarification where a provided tool fits"
+  },
+  "live_simple_70-34-0": {
+   "verdict": "ambiguous",
+   "note": "'today' given as t0/t1 range vs unset; both readable"
+  },
+  "multiple_182": {
+   "verdict": "model_error",
+   "note": "adds an unrequested optional value"
+  },
+  "parallel_114": {
+   "verdict": "model_error",
+   "note": "misses requested calls (second sequence / baseline growth rate)"
+  },
+  "parallel_124": {
+   "verdict": "model_error",
+   "note": "misses requested calls (second sequence / baseline growth rate)"
+  },
+  "parallel_185": {
+   "verdict": "label_error",
+   "note": "singular accepted for 'Bengal Tiger' but not 'African Elephant' (inconsistent)"
+  },
+  "parallel_9": {
+   "verdict": "ambiguous",
+   "note": "single call with list-valued arguments vs two calls; schema allows lists"
+  },
+  "parallel_multiple_19": {
+   "verdict": "label_error",
+   "note": "'lambda x: math.exp(-x**2)' rejected although 'lambda x: exp(-x**2)' accepted"
+  },
+  "parallel_multiple_21": {
+   "verdict": "model_error",
+   "note": "empty list instead of the given expressions"
+  },
+  "parallel_multiple_3": {
+   "verdict": "label_error",
+   "note": "tolerance 0.1 accepted for 'length' but not for 'width' (inconsistent)"
+  },
+  "parallel_multiple_97": {
+   "verdict": "label_error",
+   "note": "schema says 'interest rate in percentage' (4); ground truth expects 0.04"
+  },
+  "simple_java_27": {
+   "verdict": "model_error",
+   "note": "array passed as a string"
+  },
+  "simple_python_13": {
+   "verdict": "label_error",
+   "note": "integers [1, 3] rejected for an array of floats"
+  },
+  "simple_python_202": {
+   "verdict": "model_error",
+   "note": "over-specific value ('solar' for 'renewable energy sources')"
+  },
+  "simple_python_267": {
+   "verdict": "model_error",
+   "note": "adds an unrequested optional value"
+  },
+  "simple_python_383": {
+   "verdict": "label_error",
+   "note": "'The Plaza hotel' rejected, only 'The Plaza' accepted"
+  }
+ }
+}
