@@ -10,6 +10,7 @@ workload:
   n_requests: 120          # per repeat and concurrency level
   max_tokens: 1024         # what the BFCL handler requests via the serving cap
   temperature: 0.001       # the frozen BFCL temperature
+  shuffle_seed: 20261019   # file order is grouped by category; every run replays this order
 mode: closed
 concurrency: [1, 2, 4]
 warmup: 4

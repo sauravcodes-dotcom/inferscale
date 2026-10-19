@@ -28,7 +28,6 @@ from typing import Any
 import yaml
 from pydantic import Field, field_validator
 
-from bench import analyze
 from bench.reliability import Procs, engine_healthy, gateway_ready, wait_until
 from bench.run_experiment import (
     Experiment,
@@ -63,6 +62,10 @@ class Sweep(_Strict):
     serving_profile: str = "configs/serving/mac-llamacpp-bfcl-gwv.yaml"
     engine_start_timeout_s: float = 240.0
     settle_s: float = Field(default=30.0, ge=0)  # idle time after the engine is up
+    restart_per_run: bool = True  # cold engine (empty caches) for every level x repeat
+    # KV cache bytes per context token, for the computed KV column (this llama.cpp build does
+    # not log buffer sizes). Qwen3-8B, f16 cache: 36 layers x 8 KV heads x 128 x (K+V) x 2 B.
+    kv_bytes_per_token: int | None = 147456
     report: str
     variants: list[Variant]
 
@@ -94,19 +97,13 @@ def peak(runs: list[dict[str, Any]], key: str) -> float | None:
     return max(xs) if xs else None
 
 
-async def run_variant(
-    sweep: Sweep, exp: Experiment, v: Variant, procs: Procs, stamp: str
-) -> dict[str, Any]:
-    reasons = preflight_reasons(exp)
+async def bring_up(sweep: Sweep, v: Variant, procs: Procs, stamp: str) -> tuple[Path, float | None]:
+    """Start engine then gateway; returns (engine log, seconds to healthy or None if it failed)."""
     log_name = f"sweep-{sweep.name}-{stamp}-{v.name}-engine.log"
     log_path = procs.start_engine(sweep.engine_profile, v.engine_env, log_name)
     up = await wait_until(engine_healthy, sweep.engine_start_timeout_s, interval=1.0)
-    engine = procs.engine
     if up is None:
-        exited = engine is not None and engine.poll() is not None
-        procs.stop_all()
-        tail = log_path.read_text(errors="replace").splitlines()[-5:]
-        return {"variant": v.model_dump(), "skipped": True, "exited": exited, "log_tail": tail}
+        return log_path, None
     procs.start_gateway(
         gateway_env(sweep, v), sweep.serving_profile, f"sweep-{sweep.name}-{stamp}-gateway.log"
     )
@@ -115,6 +112,38 @@ async def run_variant(
         raise SystemExit(f"{v.name}: gateway did not become ready")
     if sweep.settle_s:
         await asyncio.sleep(sweep.settle_s)
+    return log_path, up
+
+
+def kv_mib(sweep: Sweep, v: Variant) -> float | None:
+    ctx = engine_env_value(sweep.engine_profile, v.engine_env, "ENGINE_CTX")
+    if sweep.kv_bytes_per_token is None or ctx is None:
+        return None
+    return int(ctx) * sweep.kv_bytes_per_token / 2**20
+
+
+async def run_variant(
+    sweep: Sweep, exp: Experiment, v: Variant, procs: Procs, stamp: str
+) -> dict[str, Any]:
+    reasons = preflight_reasons(exp)
+    log_path, up = await bring_up(sweep, v, procs, stamp)
+    if up is None:
+        exited = procs.engine is not None and procs.engine.poll() is not None
+        procs.stop_all()
+        tail = log_path.read_text(errors="replace").splitlines()[-5:]
+        return {"variant": v.model_dump(), "skipped": True, "exited": exited, "log_tail": tail}
+    restarts: list[float | None] = []
+
+    async def cold_start(i: int) -> None:
+        # Every run starts from a fresh engine: an empty prompt cache and KV, so runs replaying
+        # the same requests are comparable and none benefits from an earlier run's cache.
+        if i == 0 or not sweep.restart_per_run:
+            return
+        procs.stop_all()
+        restarts.append((await bring_up(sweep, v, procs, stamp))[1])
+        if restarts[-1] is None:
+            raise SystemExit(f"{v.name}: engine did not restart")
+
     vexp = exp.model_copy(
         update={
             "concurrency": v.concurrency or exp.concurrency,
@@ -129,6 +158,7 @@ async def run_variant(
             workload_fingerprint=wfp,
             preflight={"warnings": reasons},
             response_format=rf,
+            before_run=cold_start,
         )
     finally:
         procs.stop_all()
@@ -136,8 +166,9 @@ async def run_variant(
         "variant": v.model_dump(),
         "skipped": False,
         "engine_up_s": round(up, 1),
+        "engine_restarts_up_s": restarts,
         "engine_log": str(log_path.relative_to(ROOT)),
-        "engine_buffers_mib": analyze.engine_buffers(log_path),
+        "kv_cache_mib_computed": kv_mib(sweep, v),
         "gateway_env": gateway_env(sweep, v),
         "peak_engine_rss_bytes": peak(result["runs"], "engine_rss_bytes"),
         "result": result,
@@ -189,7 +220,7 @@ def render_markdown(res: dict[str, Any]) -> str:
         f"{res['valid']}.",
         "",
         "| variant | conc | ok/n | e2e p50 s [95% CI] | e2e p95 s | req/s | prefill tok/s "
-        "| decode tok/s/req | prompt reuse | peak RSS GB | KV MiB | swap growth MB |",
+        "| decode tok/s/req | prompt reuse | peak RSS GB | KV MiB (computed) | swap growth MB |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for v in res["variants"]:
@@ -197,8 +228,7 @@ def render_markdown(res: dict[str, Any]) -> str:
         if v["skipped"]:
             lines.append(f"| {name} | skipped (engine did not start) |" + " |" * 10)
             continue
-        bufs = v.get("engine_buffers_mib") or {}
-        kv = sum(x for k, x in bufs.items() if k.startswith("KV:")) or None
+        kv = v.get("kv_cache_mib_computed")
         for run in v["result"]["runs"]:
             s, e = run["summary"], run.get("engine", {})
             rss = peak([run], "engine_rss_bytes")
@@ -219,7 +249,9 @@ def render_markdown(res: dict[str, Any]) -> str:
         "e2e: request sent to last byte received, as the client sees it (in gateway_validated "
         "mode the gateway sends a tool call only after validating it, so time to first token "
         "equals e2e). prefill/decode: llama.cpp counters over the run (per-request rates). "
-        "Prompt reuse: share of client prompt tokens the engine did not evaluate (prompt cache).",
+        "Prompt reuse: share of client prompt tokens the engine did not evaluate (prompt cache). "
+        "Each run starts from a restarted engine, so reuse is within-run only. KV MiB: computed "
+        "from total context (ENGINE_CTX) and the model's KV bytes per token.",
         "",
     ]
     for v in res["variants"]:

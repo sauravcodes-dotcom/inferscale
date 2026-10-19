@@ -2,7 +2,7 @@
 name: bfcl_smoke
 description: 8 BFCL dev requests at concurrency 1 and 2 (smoke)
 smoke: true
-workload: {dataset: bfcl, partition: dev, n_requests: 8, max_tokens: 1024, temperature: 0.001}
+workload: {dataset: bfcl, partition: dev, n_requests: 8, max_tokens: 1024, temperature: 0.001, shuffle_seed: 20261019}
 mode: closed
 concurrency: [1, 2]
 warmup: 1

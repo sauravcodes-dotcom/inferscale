@@ -161,3 +161,35 @@ def test_render_marks_missing_as_na() -> None:
     assert "| gateway | c=1 | 0/1 | n/a | n/a |" in md
     assert "Peak llama-server RSS: n/a" in md
     assert "engine_unavailable" in md
+
+
+async def test_before_run_hook_runs_before_each_run(live_gateway: LiveFactory) -> None:
+    url = await live_gateway(FakeBackend(token_delay_s=0.001))
+    exp = Experiment.model_validate(
+        {
+            "name": "hook",
+            "smoke": True,
+            "workload": {"n_requests": 2, "max_tokens": 8},
+            "concurrency": [1, 2],
+            "warmup": 0,
+            "repeats": 2,
+            "cooldown_s": 0,
+            "gateway_url": url,
+            "engine_url": "",
+        }
+    )
+    calls: list[int] = []
+
+    async def hook(i: int) -> None:
+        calls.append(i)
+
+    await run_experiment(
+        exp,
+        prompts=PROMPTS,
+        workload_fingerprint={},
+        preflight={},
+        sampler_factory=lambda _e: StubSampler([0.0, 0.0]),
+        before_run=hook,
+        log=lambda _m: None,
+    )
+    assert calls == [0, 1, 2, 3]

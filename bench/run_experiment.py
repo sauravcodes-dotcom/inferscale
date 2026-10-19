@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
+import random
 import re
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -54,6 +56,8 @@ class Workload(_Strict):
     split_file: str = "splits/pag_v1.json"
     # bfcl: requests exported by tools/bfcl/export_requests.py (dev only; never the test split)
     categories: list[str] | None = None
+    # bfcl: requests are stored grouped by category; a seeded shuffle makes any prefix a mix.
+    shuffle_seed: int | None = None
     partition: Literal["dev", "pool", "test"] = "pool"
     prompt: str = "pag_v1"
     response_format: Literal["none", "json_schema"] = "json_schema"
@@ -209,6 +213,7 @@ async def run_experiment(
     response_format: dict[str, Any] | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
     sampler_factory: Callable[[Experiment], MemorySampler] | None = None,
+    before_run: Callable[[int], Awaitable[None]] | None = None,
     log: Callable[[str], None] = lambda m: print(m, file=sys.stderr),
 ) -> dict[str, Any]:
     registry = load_registry(ROOT / "configs" / "models" / "registry.yaml")
@@ -236,6 +241,8 @@ async def run_experiment(
     runs: list[dict[str, Any]] = []
     plan = [(load, rep) for load in loads for rep in range(exp.repeats)]
     for i, ((kind, value), rep) in enumerate(plan):
+        if before_run is not None:
+            await before_run(i)
         log(f"[{i + 1}/{len(plan)}] {kind}={value:g} repeat={rep + 1}/{exp.repeats} n={n}")
         sampler = (
             sampler_factory(exp)
@@ -298,12 +305,18 @@ def load_workload(
         if w.partition != "dev":
             raise SystemExit("bfcl benchmark workloads use the dev partition only")
         reqs = bfcl_requests("dev", w.categories)
+        if w.shuffle_seed is not None:
+            random.Random(w.shuffle_seed).shuffle(reqs)
         path = ROOT / "results" / "bfcl" / "raw" / "requests-dev.jsonl"
         fp = {
             "workload": {
                 "dataset": "bfcl",
                 "partition": "dev",
                 "categories": w.categories,
+                "shuffle_seed": w.shuffle_seed,
+                "order_sha256": hashlib.sha256(
+                    "\n".join(r["id"] for r in reqs).encode()
+                ).hexdigest(),
                 "n_requests_available": len(reqs),
                 "requests_sha256": sha256_file(path),
                 "split_file": "splits/bfcl_v4_single_turn_v1.json",

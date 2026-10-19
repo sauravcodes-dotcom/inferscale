@@ -7,7 +7,15 @@ from pathlib import Path
 import pytest
 
 from bench.run_experiment import Workload, engine_delta, load_workload
-from bench.sweep import Sweep, Variant, engine_env_value, gateway_env, load_sweep, render_markdown
+from bench.sweep import (
+    Sweep,
+    Variant,
+    engine_env_value,
+    gateway_env,
+    kv_mib,
+    load_sweep,
+    render_markdown,
+)
 from evals.dataset import ROOT
 
 
@@ -85,7 +93,7 @@ def test_render_markdown_with_skipped_variant() -> None:
             {
                 "variant": {"name": "a"},
                 "skipped": False,
-                "engine_buffers_mib": {"KV:MTL0": 2304.0},
+                "kv_cache_mib_computed": 2304.0,
                 "result": {"runs": [run]},
             },
             {"variant": {"name": "b"}, "skipped": True},
@@ -104,3 +112,20 @@ def test_committed_sweeps_load() -> None:
     for p in sorted((ROOT / "configs" / "sweeps").glob("*.yaml")):
         s = load_sweep(p)
         assert (ROOT / s.experiment).is_file(), p
+
+
+def test_kv_computed_from_context() -> None:
+    v = Variant(name="slots4", engine_env={"ENGINE_CTX": "32768"})
+    assert kv_mib(sweep(v), v) == 4608.0  # 32768 tokens x 144 KiB
+    assert kv_mib(sweep(Variant(name="d")), Variant(name="d")) == 2304.0  # bfcl profile 16384
+
+
+def test_bfcl_shuffle_is_seeded_and_mixes_categories() -> None:
+    if not (ROOT / "results" / "bfcl" / "raw" / "requests-dev.jsonl").is_file():
+        pytest.skip("BFCL dev requests not exported")
+    w = Workload(dataset="bfcl", partition="dev", shuffle_seed=7)
+    a, _, fa = load_workload(w)
+    b, _, fb = load_workload(w)
+    assert [r["id"] for r in a] == [r["id"] for r in b]
+    assert fa["workload"]["order_sha256"] == fb["workload"]["order_sha256"]
+    assert len({r["category"] for r in a[:40]}) > 3  # the unshuffled file starts with one category
