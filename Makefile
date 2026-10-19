@@ -1,4 +1,4 @@
-.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev check-data-text freeze-prompt eval-test preflight bfcl-setup engine-bfcl serve-bfcl
+.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev check-data-text freeze-prompt eval-test preflight bfcl-setup engine-bfcl serve-bfcl bfcl-test
 
 HOST ?= 127.0.0.1
 PORT ?= 8000
@@ -76,3 +76,7 @@ engine-bfcl:
 
 serve-bfcl:
 	INFERSCALE_CONFIG_FILE=configs/serving/mac-llamacpp-bfcl.yaml $(MAKE) serve
+
+# One-time BFCL held-out run with the frozen config (needs restart, AC power, no browsers).
+bfcl-test:
+	./scripts/bfcl_test.sh

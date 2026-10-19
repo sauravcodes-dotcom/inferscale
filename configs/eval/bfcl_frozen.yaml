@@ -1,0 +1,19 @@
+# BFCL run configuration frozen for the held-out partition (evals.bfcl.freeze).
+config_sha256: 0de0877ca6bdf47b170812033f99bf598a3f2d7735a66fc9562e9a0cf1df9898
+dev_result_file: results/bfcl/qwen3-8b-q4km-v1/20261019T011416Z-dev.json
+frozen_at: '2026-10-19T01:54:33+00:00'
+reason: 'gateway_validated: live +9.17 (CI +5.0..+15.0) vs engine mode, non-live unchanged (-0.21, CI
+  -0.6..0.0); McNemar p=0.0064 on 347 dev entries'
+config:
+  adapter_sha256: 61845f964aa5eb54c5ac24149c7d0cc37cbccca8f97ff3ad5151ffd3cea3f086
+  bfcl_lock_sha256: 3bdc2e712f27cd5cdd8e30a20a930fdeb24d06a22f935c4c09f28b5b38c6c1da
+  engine:
+    build_info: b11669-620d2225c
+    model_path: /Users/sauravsharma/models/qwen3-8b-gguf/Qwen3-8B-Q4_K_M.gguf
+    n_ctx_per_slot: 8192
+    total_slots: 2
+  engine_profile: bfcl
+  engine_profile_sha256: 383c36151064b4078561298781cae05fcbc5889066cefc34bef80383092f3af7
+  serving_profile: configs/serving/mac-llamacpp-bfcl-gwv.yaml
+  serving_profile_sha256: da3ed6e6f162ae93653e11debce906607e01479123d52a6b0accf972bed9cbc9
+  temperature: 0.001
