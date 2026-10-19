@@ -82,3 +82,13 @@ def test_registry_rejects_bad_entry(field: str, value: object) -> None:
     data["models"][MODEL_VERSION][field] = value
     with pytest.raises(ValidationError):
         Registry.model_validate(data)
+
+
+def test_active_model_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    reg = load_registry(REGISTRY_PATH, "qwen3-8b-q8-v1")
+    assert reg.active == "qwen3-8b-q8-v1" and reg.active_entry.quant == "Q8_0"
+    assert load_registry(REGISTRY_PATH).active == MODEL_VERSION  # file default unchanged
+    with pytest.raises(ValidationError):
+        load_registry(REGISTRY_PATH, "no-such-model")
+    monkeypatch.setenv("INFERSCALE_ACTIVE_MODEL", "qwen3-8b-q8-v1")
+    assert load_settings(SERVING_PATH).active_model == "qwen3-8b-q8-v1"

@@ -28,7 +28,7 @@ from typing import Any
 import yaml
 from pydantic import Field, field_validator
 
-from bench.reliability import Procs, engine_healthy, gateway_ready, wait_until
+from bench.reliability import ENGINE, Procs, engine_healthy, gateway_ready, wait_until
 from bench.run_experiment import (
     Experiment,
     _Strict,
@@ -38,7 +38,8 @@ from bench.run_experiment import (
     run_experiment,
 )
 from evals.dataset import ROOT
-from evals.fingerprint import git_state
+from evals.fingerprint import engine_props, git_state
+from inferscale.registry import load_registry
 
 
 class Variant(_Strict):
@@ -47,6 +48,9 @@ class Variant(_Strict):
     engine_env: dict[str, str] = Field(default_factory=dict)
     gateway_env: dict[str, str] = Field(default_factory=dict)
     concurrency: list[int] | None = None  # overrides the experiment's levels for this variant
+    # Registry version this variant serves (gateway active model + result fingerprint); the
+    # engine's loaded file must be that version's file. None = the registry's active version.
+    model_version: str | None = None
 
     @field_validator("engine_env")
     @classmethod
@@ -89,7 +93,18 @@ def engine_env_value(profile: str, overrides: dict[str, str], key: str) -> str |
 def gateway_env(sweep: Sweep, v: Variant) -> dict[str, str]:
     """Admission must match the engine's slots, or the gateway over- or under-admits."""
     slots = engine_env_value(sweep.engine_profile, v.engine_env, "ENGINE_PARALLEL") or "2"
-    return {"INFERSCALE_ADMISSION__MAX_INFLIGHT": slots, **v.gateway_env}
+    env = {"INFERSCALE_ADMISSION__MAX_INFLIGHT": slots}
+    if v.model_version:
+        env["INFERSCALE_ACTIVE_MODEL"] = v.model_version
+    return {**env, **v.gateway_env}
+
+
+def model_mismatch(v: Variant, props: dict[str, Any] | None) -> str | None:
+    """Refuse to label a run with a registry version the engine is not actually serving."""
+    registry = load_registry(ROOT / "configs" / "models" / "registry.yaml", v.model_version)
+    want = registry.active_entry.file
+    got = Path(str((props or {}).get("model_path") or "")).name
+    return None if got == want else f"engine serves {got or 'unknown'!r}, registry expects {want!r}"
 
 
 def peak(runs: list[dict[str, Any]], key: str) -> float | None:
@@ -110,6 +125,10 @@ async def bring_up(sweep: Sweep, v: Variant, procs: Procs, stamp: str) -> tuple[
     if await wait_until(gateway_ready, 30) is None:
         procs.stop_all()
         raise SystemExit(f"{v.name}: gateway did not become ready")
+    problem = model_mismatch(v, await engine_props(ENGINE))
+    if problem:
+        procs.stop_all()
+        raise SystemExit(f"{v.name}: {problem}")
     if sweep.settle_s:
         await asyncio.sleep(sweep.settle_s)
     return log_path, up
@@ -147,6 +166,7 @@ async def run_variant(
     vexp = exp.model_copy(
         update={
             "concurrency": v.concurrency or exp.concurrency,
+            "model_version": v.model_version or exp.model_version,
             "engine_log": str(log_path.relative_to(ROOT)),
         }
     )

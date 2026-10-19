@@ -181,7 +181,7 @@ def create_app(
 ) -> FastAPI:
     configure_logging()
     settings = settings or load_settings()
-    registry = registry or load_registry(settings.registry_path)
+    registry = registry or load_registry(settings.registry_path, settings.active_model)
     backend = backend or OpenAIHTTPBackend(
         settings.engine_url,
         connect_timeout_s=settings.deadlines.connect_timeout_s,

@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     config_file: str = DEFAULT_CONFIG_FILE
     engine_url: str = "http://127.0.0.1:8081"
     registry_path: str = "configs/models/registry.yaml"
+    # Serve another registry version than the file's `active` (e.g. a quantization sweep); the
+    # engine must be running that version's file.
+    active_model: str | None = None
     admission: AdmissionConfig = AdmissionConfig()
     deadlines: DeadlineConfig = DeadlineConfig()
     limits: LimitsConfig = LimitsConfig()

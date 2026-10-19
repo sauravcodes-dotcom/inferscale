@@ -10,3 +10,13 @@ models:
     engine_version: b11669
     quant: Q4_K_M
     thinking: false
+
+  qwen3-8b-q8-v1:
+    hf_repo: Qwen/Qwen3-8B-GGUF
+    hf_revision: 7c41481f57cb95916b40956ab2f0b139b296d974
+    file: Qwen3-8B-Q8_0.gguf
+    sha256: 408b955510e196121c1c375201744783b5c9a43c7956d73fc78df54c66e883d6
+    engine: llama.cpp
+    engine_version: b11669
+    quant: Q8_0
+    thinking: false

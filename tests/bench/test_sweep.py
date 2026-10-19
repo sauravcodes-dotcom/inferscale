@@ -14,6 +14,7 @@ from bench.sweep import (
     gateway_env,
     kv_mib,
     load_sweep,
+    model_mismatch,
     render_markdown,
 )
 from evals.dataset import ROOT
@@ -129,3 +130,13 @@ def test_bfcl_shuffle_is_seeded_and_mixes_categories() -> None:
     assert [r["id"] for r in a] == [r["id"] for r in b]
     assert fa["workload"]["order_sha256"] == fb["workload"]["order_sha256"]
     assert len({r["category"] for r in a[:40]}) > 3  # the unshuffled file starts with one category
+
+
+def test_model_version_reaches_gateway_and_is_checked_against_engine() -> None:
+    v = Variant(name="q8", model_version="qwen3-8b-q8-v1")
+    assert gateway_env(sweep(v), v)["INFERSCALE_ACTIVE_MODEL"] == "qwen3-8b-q8-v1"
+    assert model_mismatch(v, {"model_path": "/m/Qwen3-8B-Q8_0.gguf"}) is None
+    assert "registry expects 'Qwen3-8B-Q8_0.gguf'" in (
+        model_mismatch(v, {"model_path": "/m/Qwen3-8B-Q4_K_M.gguf"}) or ""
+    )
+    assert model_mismatch(Variant(name="d"), None) is not None  # unknown engine model: refuse

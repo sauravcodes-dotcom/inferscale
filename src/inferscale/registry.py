@@ -39,7 +39,10 @@ class Registry(BaseModel):
         return self.models[self.active]
 
 
-def load_registry(path: str | Path) -> Registry:
+def load_registry(path: str | Path, active: str | None = None) -> Registry:
+    """`active` overrides the file's active version (it must be one of its models)."""
     with Path(path).open() as f:
         data = yaml.safe_load(f)
+    if active is not None:
+        data["active"] = active
     return Registry.model_validate(data)
