@@ -1,4 +1,4 @@
-.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev check-data-text freeze-prompt eval-test preflight bfcl-setup engine-bfcl serve-bfcl bfcl-test reliability
+.PHONY: setup lint format typecheck test test-integration engine serve bench-e1 bench-smoke fetch-data split baselines eval-smoke eval-dev check-data-text freeze-prompt eval-test preflight bfcl-setup engine-bfcl serve-bfcl bfcl-test reliability bfcl-requests m43 m43-smoke
 
 HOST ?= 127.0.0.1
 PORT ?= 8000
@@ -84,3 +84,17 @@ bfcl-test:
 # Reliability validation against the real engine (starts/stops its own processes).
 reliability:
 	uv run python -m bench.reliability
+
+# M4.3 inference sweeps (start/stop their own engine + gateway; need ports 8000/8081 free).
+bfcl-requests:
+	tools/bfcl/.venv/bin/python tools/bfcl/export_requests.py --partition dev
+
+# Clean environment required (restart, AC, no browsers). Order matters: the cache sweep's 8 GiB
+# variant is expected to swap, so it runs last. ~4.5 h in total.
+m43: bfcl-requests
+	uv run python -m bench.sweep configs/sweeps/m43_slots.yaml
+	uv run python -m bench.sweep configs/sweeps/m43_quant.yaml
+	uv run python -m bench.sweep configs/sweeps/m43_cache_ram.yaml
+
+m43-smoke: bfcl-requests
+	uv run python -m bench.sweep configs/sweeps/m43_smoke.yaml
