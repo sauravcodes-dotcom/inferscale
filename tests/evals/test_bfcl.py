@@ -284,3 +284,16 @@ def test_selection_accuracy(monkeypatch: pytest.MonkeyPatch) -> None:
         {"multiple": ["m_0", "m_1"]}, {"m_0": "weather_forecast", "m_1": "x"}
     )
     assert res["multiple"] == {"n": 2, "accuracy": 0.5}
+
+
+def test_paired_bootstrap_compare() -> None:
+    from evals.bfcl.compare import compare
+
+    a = rows("simple_python", [True, False, False, True]) + rows("live_simple", [False, False])
+    b = rows("simple_python", [True, True, False, True]) + rows("live_simple", [True, False])
+    res = compare(a, b, n_boot=200)
+    assert res["aggregates"]["live"]["diff"] == pytest.approx(0.5)
+    lo, hi = res["aggregates"]["live"]["ci95"]
+    assert lo <= 0.5 <= hi
+    assert res["mcnemar"]["by_category"]["simple_python"]["b_only_correct"] == 1
+    assert res["error_classes"]["a"] == {"x": 4} and res["error_classes"]["b"] == {"x": 2}
