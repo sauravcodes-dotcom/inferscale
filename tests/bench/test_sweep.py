@@ -164,3 +164,34 @@ async def test_resume_skips_finished_variants_and_saves_progress(tmp_path: Path)
     out = tmp_path / "r.json"
     res = await run_sweep(s, exp, None, out, prev)  # nothing left to run: no processes started
     assert res["complete"] and [v["variant"]["name"] for v in res["variants"]] == ["done"]
+
+
+def test_load_summary_counts_shedding_and_goodput() -> None:
+    from bench.sweep import load_summary
+
+    def r(ok: bool, lat: float, error: str | None = None) -> dict[str, object]:
+        return {
+            "phase": "measure",
+            "ok": ok,
+            "send_t": 0.0,
+            "end_t": lat,
+            "error": error,
+            "status": 200 if ok else 429,
+        }
+
+    run = {
+        "rate": 0.5,
+        "measure_window_s": [0.0, 10.0],
+        "records": [
+            r(True, 2.0),
+            r(True, 20.0),
+            r(False, 0.0, "queue_full"),
+            r(False, 0.0, "deadline_exceeded"),
+            {"phase": "warmup", "ok": True},
+        ],
+    }
+    m = load_summary(run, slo_s=15.0)
+    assert m["n"] == 4 and m["shed_fraction"] == 0.25
+    assert m["other_errors"] == {"deadline_exceeded": 1}
+    assert m["achieved_req_s"] == 0.2 and m["goodput_req_s"] == 0.1  # 20 s request misses SLO
+    assert m["within_slo_fraction"] == 0.25

@@ -1,0 +1,13 @@
+# Offered load vs latency, shedding and goodput with the recommended serving setup:
+# Qwen3-8B Q4_K_M, 2 slots x 8192 tokens, host prompt cache off, gateway_validated.
+# Where is the knee, and does admission control keep admitted requests within the SLO past it?
+name: m44_load
+description: |
+  Open-loop Poisson load (0.10-0.40 req/s) on BFCL dev requests: achieved throughput,
+  429 shedding, tail latency and goodput (e2e <= 15 s). Qwen3-8B Q4_K_M, 2 slots, cache-ram 0.
+experiment: configs/experiments/bfcl_load.yaml
+engine_profile: bfcl
+slo_s: 15
+report: reports/m44_load.md
+variants:
+  - {name: q4_2slots_nocache, engine_env: {ENGINE_CACHE_RAM: "0"}}

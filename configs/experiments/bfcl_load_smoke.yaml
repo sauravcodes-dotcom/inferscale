@@ -1,0 +1,17 @@
+# Pipeline smoke test only: NOT a result. Warnings-only preflight.
+name: bfcl_load_smoke
+description: 6 BFCL dev requests per rate, open loop (smoke)
+smoke: true
+workload: {dataset: bfcl, partition: dev, n_requests: 6, max_tokens: 1024, temperature: 0.001, shuffle_seed: 20261019}
+mode: open
+rates: [0.5, 2.0]
+warmup: 1
+repeats: 1
+cooldown_s: 2
+max_swap_growth_mb: 32
+report: reports/bfcl_load_smoke.md
+preflight:
+  enforce: false
+  require_ac: true
+  max_swap_mb_start: 64
+  forbidden_processes: ["^Google Chrome( Helper.*)?$", "^Safari$", "^[Oo]llama.*"]

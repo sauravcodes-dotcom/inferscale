@@ -21,6 +21,7 @@ import asyncio
 import json
 import os
 import sys
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -69,6 +70,8 @@ class Sweep(_Strict):
     # Gateway env for every variant (a variant's gateway_env wins), e.g. a long queue timeout so
     # concurrency above the slot count measures queueing delay instead of shedding.
     gateway_env: dict[str, str] = Field(default_factory=dict)
+    # Open-loop sweeps: latency objective for goodput (requests completed OK within slo_s, per s).
+    slo_s: float | None = None
     restart_per_run: bool = True  # cold engine (empty caches) for every level x repeat
     # KV cache bytes per context token, for the computed KV column (this llama.cpp build does
     # not log buffer sizes). Qwen3-8B, f16 cache: 36 layers x 8 KV heads x 128 x (K+V) x 2 B.
@@ -251,6 +254,69 @@ def _f(v: float | None, fmt: str) -> str:
     return "n/a" if v is None else format(v, fmt)
 
 
+def load_summary(run: dict[str, Any], slo_s: float | None) -> dict[str, Any]:
+    """Open-loop view of one run: offered vs achieved load, shedding, tail latency, goodput."""
+    recs = [r for r in run["records"] if r["phase"] == "measure"]
+    ok = [r for r in recs if r["ok"]]
+    lat = sorted(r["end_t"] - r["send_t"] for r in ok)
+    errors = Counter(r.get("error") or f"http_{r.get('status')}" for r in recs if not r["ok"])
+    shed = sum(n for e, n in errors.items() if e in ("queue_full", "queue_timeout"))
+    window = run["measure_window_s"][1] - run["measure_window_s"][0]
+
+    def pct(q: float) -> float | None:
+        return lat[min(len(lat) - 1, int(q * len(lat)))] if lat else None
+
+    good = sum(1 for x in lat if slo_s is None or x <= slo_s)
+    return {
+        "offered_req_s": run.get("rate"),
+        "n": len(recs),
+        "achieved_req_s": len(ok) / window if window > 0 else None,
+        "shed_fraction": shed / len(recs) if recs else None,
+        "other_errors": {
+            e: n for e, n in errors.items() if e not in ("queue_full", "queue_timeout")
+        },
+        "p50_s": pct(0.50),
+        "p95_s": pct(0.95),
+        "p99_s": pct(0.99),
+        "slo_s": slo_s,
+        "goodput_req_s": good / window if window > 0 else None,
+        "within_slo_fraction": good / len(recs) if recs else None,
+    }
+
+
+def render_load(res: dict[str, Any]) -> list[str]:
+    slo = res["sweep"].get("slo_s")
+    lines = [
+        "",
+        f"Open-loop load (Poisson arrivals). Goodput: requests completed OK within "
+        f"{slo:g} s, per second; shed = 429 queue_full/queue_timeout."
+        if slo
+        else "Open-loop load (Poisson arrivals).",
+        "",
+        "| variant | offered req/s | n | achieved req/s | shed | other errors | p50 s | p95 s "
+        "| p99 s | goodput req/s | within SLO |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for v in res["variants"]:
+        if v["skipped"]:
+            continue
+        for run in v["result"]["runs"]:
+            if run.get("rate") is None:
+                continue
+            m = load_summary(run, slo)
+            shed = m["shed_fraction"]
+            within = m["within_slo_fraction"]
+            lines.append(
+                f"| {v['variant']['name']} | {m['offered_req_s']:g} | {m['n']} "
+                f"| {_f(m['achieved_req_s'], '.3f')} "
+                f"| {_f(shed * 100 if shed is not None else None, '.0f')}% "
+                f"| {m['other_errors'] or ''} | {_f(m['p50_s'], '.2f')} | {_f(m['p95_s'], '.2f')} "
+                f"| {_f(m['p99_s'], '.2f')} | {_f(m['goodput_req_s'], '.3f')} "
+                f"| {_f(within * 100 if within is not None else None, '.0f')}% |"
+            )
+    return lines
+
+
 def render_markdown(res: dict[str, Any]) -> str:
     sw = res["sweep"]
     lines = [f"# Sweep {sw['name']}", "", sw["description"].strip(), ""]
@@ -261,7 +327,7 @@ def render_markdown(res: dict[str, Any]) -> str:
         f"{' (dirty)' if res['git'].get('dirty') else ''}. Valid (no swap growth): "
         f"{res['valid']}.",
         "",
-        "| variant | conc | ok/n | e2e p50 s [95% CI] | e2e p95 s | req/s | prefill tok/s "
+        "| variant | load | ok/n | e2e p50 s [95% CI] | e2e p95 s | req/s | prefill tok/s "
         "| decode tok/s/req | prompt reuse | peak RSS GB | KV MiB (computed) | swap growth MB |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
@@ -277,8 +343,10 @@ def render_markdown(res: dict[str, Any]) -> str:
             ci = s["e2e_s"].get("p50_ci95")
             ci_s = f"[{ci[0]:.2f}, {ci[1]:.2f}]" if ci else ""
             reuse = e.get("prompt_cache_reuse_fraction")
+            load = f"{run['rate']:g}/s" if run.get("rate") is not None else run["concurrency"]
             lines.append(
-                f"| {name} | {run['concurrency']} | {s['n_ok']}/{s['n']} "
+                f"| {name} | {load} "
+                f"| {s['n_ok']}/{s['n']} "
                 f"| {_f(s['e2e_s']['p50'], '.2f')} {ci_s} | {_f(s['e2e_s']['p95'], '.2f')} "
                 f"| {_f(s['throughput_req_s'], '.3f')} | {_f(e.get('prefill_tok_s'), '.0f')} "
                 f"| {_f(e.get('decode_tok_s_per_request'), '.1f')} "
@@ -296,6 +364,13 @@ def render_markdown(res: dict[str, Any]) -> str:
         "from total context (ENGINE_CTX) and the model's KV bytes per token.",
         "",
     ]
+    if any(
+        r.get("rate") is not None
+        for v in res["variants"]
+        if not v["skipped"]
+        for r in v["result"]["runs"]
+    ):
+        lines += [*render_load(res), ""]
     for v in res["variants"]:
         if not v["skipped"] and v["result"]["runs"]:
             errs = {k: n for r in v["result"]["runs"] for k, n in r["summary"]["errors"].items()}

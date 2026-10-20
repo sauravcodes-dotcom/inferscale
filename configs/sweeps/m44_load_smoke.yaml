@@ -1,0 +1,10 @@
+# Pipeline smoke test only: NOT a result.
+name: m44_load_smoke
+description: Open-loop sweep pipeline check (smoke)
+experiment: configs/experiments/bfcl_load_smoke.yaml
+engine_profile: bfcl
+settle_s: 2
+slo_s: 15
+report: reports/m44_load_smoke.md
+variants:
+  - {name: smoke, engine_env: {ENGINE_CACHE_RAM: "0"}}
