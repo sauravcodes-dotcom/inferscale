@@ -373,7 +373,9 @@ def render_markdown(res: dict[str, Any]) -> str:
         lines += [*render_load(res), ""]
     for v in res["variants"]:
         if not v["skipped"] and v["result"]["runs"]:
-            errs = {k: n for r in v["result"]["runs"] for k, n in r["summary"]["errors"].items()}
+            errs = dict(
+                sum((Counter(r["summary"]["errors"]) for r in v["result"]["runs"]), Counter())
+            )
             if errs:
                 lines.append(f"- {v['variant']['name']} errors: {errs}")
     return "\n".join(lines) + "\n"

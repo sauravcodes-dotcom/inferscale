@@ -195,3 +195,37 @@ def test_load_summary_counts_shedding_and_goodput() -> None:
     assert m["other_errors"] == {"deadline_exceeded": 1}
     assert m["achieved_req_s"] == 0.2 and m["goodput_req_s"] == 0.1  # 20 s request misses SLO
     assert m["within_slo_fraction"] == 0.25
+
+
+def test_render_sums_errors_across_runs() -> None:
+    def run(errors: dict[str, int]) -> dict[str, object]:
+        dist = {"p50": 1.0, "p95": 1.0, "p50_ci95": None}
+        return {
+            "concurrency": 1,
+            "summary": {
+                "n": 1,
+                "n_ok": 0,
+                "errors": errors,
+                "e2e_s": dist,
+                "throughput_req_s": None,
+            },
+            "engine": {},
+            "samples": [],
+            "validity": {},
+        }
+
+    res = {
+        "sweep": {"name": "s", "description": ""},
+        "run_kind": "full",
+        "started_at": "2026-10-20T00:00:00+00:00",
+        "git": {"sha": "x"},
+        "valid": True,
+        "variants": [
+            {
+                "variant": {"name": "v"},
+                "skipped": False,
+                "result": {"runs": [run({"queue_timeout": 4}), run({"queue_timeout": 3})]},
+            }
+        ],
+    }
+    assert "{'queue_timeout': 7}" in render_markdown(res)
