@@ -57,9 +57,33 @@ The engine is restarted before every run. Full tables: [m43_slots.md](m43_slots.
   production setting on this machine.
 - **Quality:** BFCL accuracy of Q8_0 has not been measured.
 
+## 3. The host prompt cache buys almost nothing; disable it
+
+All 347 BFCL dev requests in evaluation order (category-grouped, so consecutive requests share
+tool definitions), single stream, one run per setting. The run started at 00:47 UTC on AC with
+886 MB of swap left from earlier runs. Full table: [m43_cache_ram.md](m43_cache_ram.md).
+
+| `--cache-ram` MiB | wall s | e2e p50 s [95% CI] | prompt tokens reused | peak RSS GB | swap growth |
+|---|---|---|---|---|---|
+| 0 | 1346 | 3.09 [2.89, 3.34] | 54.0% | 7.46 | 0 |
+| 1024 | 1361 | 3.09 [2.91, 3.33] | 55.4% | 9.05 | 0 |
+| 4096 | 1374 | 3.16 [2.88, 3.35] | 55.9% | 9.25 | +2.75 GB |
+| 8192 (llama.cpp default) | 1295 | 2.97 [2.74, 3.16] | 56.9% | 9.16 | +6.80 GB |
+
+- **Reuse:** 54% of prompt tokens are reused with no host cache at all. That reuse is llama.cpp
+  keeping a slot's KV prefix between consecutive requests that share a system prompt and tools.
+  The host cache adds only 1.4 to 2.9 points.
+- **Latency:** the medians overlap across all four settings. The 8 GiB setting finished 4%
+  faster, but this is one run per setting and it swapped 6.8 GB doing it.
+- **Memory:** even the 1 GiB cap costs about 1.6 GB of extra peak RSS (7.46 → 9.05 GB). At
+  4–8 GiB, peak RSS stops growing only because the cache is pushed out to swap.
+- **Recommendation:** `--cache-ram 0` for this workload on a 16 GB Mac: same latency, about
+  1.6 GB less memory, no swap. The current default (1024) is safe but buys nothing measurable.
+  This also confirms that the 9.5 GB of swap in the first BFCL dev run came from llama.cpp's
+  8 GiB default.
+
 ## Not measured
 
-- **Prompt-cache size sweep:** stopped. The Mac slept repeatedly on battery with the lid closed,
-  so requests timed out across sleeps (16 timeouts in the first 162). It needs a rerun on AC.
+- **Q8_0 accuracy on BFCL.**
 - **Per-request time to first token:** in `gateway_validated` mode it equals end-to-end
   latency, because the gateway sends a tool call only after validating it.

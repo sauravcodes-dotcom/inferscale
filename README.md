@@ -184,7 +184,7 @@ Results so far ([reports/m43_findings.md](reports/m43_findings.md)):
 - 4 slots add +30% throughput, but at 11.8 s median latency and with swapping.
 - Q8_0 matches Q4_K_M single-stream (3.70 vs 3.73 s). Prefill is 14% faster and decode 15%
   slower. It is 21% faster at 2 concurrent requests, but it peaks at 11.7 GB and swaps on 16 GB.
-- The prompt-cache sweep still needs a clean rerun.
+- llama.cpp's host prompt cache adds only 1.4–2.9 points of prompt reuse (54% without it, from in-slot prefix reuse) and no measurable latency gain. Its 8 GiB default swaps 6.8 GB, so `--cache-ram 0` is the better setting here.
 
 One measurement note from the BFCL runs: BFCL's own `latency` times a streaming `create()`
 call, i.e. time to response headers. The 1.5 s (streaming modes) vs 3.75 s
@@ -242,5 +242,5 @@ are written to the git-ignored `results/bfcl/raw/`.
 
 - Gateway, tool-call modes and reliability suite: implemented and validated (26/26).
 - BFCL: held-out test run once with the frozen config (results above).
-- Serving sweeps: slots and quantisation done (conditions not fully clean, flagged per run); cache sweep pending.
+- Serving sweeps: slots, quantisation and prompt cache done (conditions not fully clean, flagged per run).
 - PAG: dev-split numbers are for prompt development only; its held-out test has not been run.
