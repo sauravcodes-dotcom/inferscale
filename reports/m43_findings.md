@@ -41,7 +41,7 @@ The engine is restarted before every run. Full tables: [m43_slots.md](m43_slots.
 
 `llama-batched-bench` (llama.cpp b11669, no gateway) runs a 1,024-token prompt plus 64
 generated tokens per sequence, with 1, 2, 4 and 8 parallel sequences
-(`results/bench/batched/*.jsonl`; command in its README note below).
+(`results/bench/batched/*.jsonl`; command below).
 
 | parallel sequences | Q4_K_M decode tok/s (total) | Q8_0 decode tok/s (total) | prefill tok/s (Q4 / Q8) |
 |---|---|---|---|
@@ -79,7 +79,13 @@ Command: `llama-batched-bench -m <model> -c 9216 -b 2048 -ub 512 -ngl 99 -npp 10
   bottleneck in finding 1.
 - **Memory:** Q8_0 peaks at 11.7 GB and swaps on 16 GB in every run, so it is not a safe
   production setting on this machine.
-- **Quality:** BFCL accuracy of Q8_0 has not been measured.
+- **Quality:** no measurable difference on BFCL dev. The same 347 entries were run with the
+  frozen settings and only the model file changed (`results/bfcl/qwen3-8b-q8-v1/`). The two
+  models disagree on 11 entries (Q4_K_M alone correct on 5, Q8_0 alone on 6; exact McNemar
+  p = 1.0). Paired differences, Q8_0 − Q4_K_M, with 95% CIs over live source groups:
+  non-live AST −1.67 [−6.2, +2.5], live +0.83 [−2.5, +3.4], irrelevance +8.33 [0, +20.8], live
+  irrelevance −1.14 [−3.0, 0]. On a 16 GB Mac the 4-bit model therefore costs no measurable
+  accuracy. The Q8_0 run swapped 4.3 GB and took 1,501 s wall vs 1,308 s.
 
 ## 3. The host prompt cache buys almost nothing; disable it
 
@@ -108,6 +114,5 @@ tool definitions), single stream, one run per setting. The run started at 00:47 
 
 ## Not measured
 
-- **Q8_0 accuracy on BFCL.**
 - **Per-request time to first token:** in `gateway_validated` mode it equals end-to-end
   latency, because the gateway sends a tool call only after validating it.

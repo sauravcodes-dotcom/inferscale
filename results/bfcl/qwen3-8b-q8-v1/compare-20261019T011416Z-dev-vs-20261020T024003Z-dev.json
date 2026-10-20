@@ -1,0 +1,159 @@
+{
+ "a": {
+  "config_sha256": "0de0877ca6bdf47b170812033f99bf598a3f2d7735a66fc9562e9a0cf1df9898",
+  "run_id": "20261019T011416Z-dev",
+  "serving_profile": "configs/serving/mac-llamacpp-bfcl-gwv.yaml"
+ },
+ "aggregates": {
+  "irrelevance": {
+   "a": 0.75,
+   "b": 0.8333333333333334,
+   "ci95": [
+    0.0,
+    0.20833333333333337
+   ],
+   "diff": 0.08333333333333337
+  },
+  "live": {
+   "a": 0.8416666666666667,
+   "b": 0.85,
+   "ci95": [
+    -0.024691358024691357,
+    0.033557046979865834
+   ],
+   "diff": 0.008333333333333304
+  },
+  "live_irrelevance": {
+   "a": 0.7954545454545454,
+   "b": 0.7840909090909091,
+   "ci95": [
+    -0.030303030303030276,
+    0.0
+   ],
+   "diff": -0.011363636363636354
+  },
+  "non_live_ast": {
+   "a": 0.8708333333333333,
+   "b": 0.8541666666666667,
+   "ci95": [
+    -0.0625,
+    0.025000000000000022
+   ],
+   "diff": -0.016666666666666607
+  }
+ },
+ "b": {
+  "config_sha256": "0a5a302007750aaa3f69ae30a2ee4a8b2ac779a087c1ffc7923b3a4d4e0bab41",
+  "run_id": "20261020T024003Z-dev",
+  "serving_profile": "configs/serving/mac-llamacpp-bfcl-gwv.yaml"
+ },
+ "error_classes": {
+  "a": {
+   "called_when_irrelevant": 24,
+   "undecodable_output": 4,
+   "wrong_arguments": 19,
+   "wrong_call_count": 5,
+   "wrong_call_set": 5
+  },
+  "b": {
+   "called_when_irrelevant": 23,
+   "undecodable_output": 7,
+   "wrong_arguments": 16,
+   "wrong_call_count": 4,
+   "wrong_call_set": 6
+  }
+ },
+ "mcnemar": {
+  "by_category": {
+   "irrelevance": {
+    "a_acc": 0.75,
+    "a_only_correct": 0,
+    "b_acc": 0.8333333333333334,
+    "b_only_correct": 2,
+    "n": 24,
+    "p_value": 0.5
+   },
+   "live_irrelevance": {
+    "a_acc": 0.7954545454545454,
+    "a_only_correct": 1,
+    "b_acc": 0.7840909090909091,
+    "b_only_correct": 0,
+    "n": 88,
+    "p_value": 1.0
+   },
+   "live_multiple": {
+    "a_acc": 0.8571428571428571,
+    "a_only_correct": 1,
+    "b_acc": 0.8761904761904762,
+    "b_only_correct": 3,
+    "n": 105,
+    "p_value": 0.625
+   },
+   "live_simple": {
+    "a_acc": 0.7333333333333333,
+    "a_only_correct": 1,
+    "b_acc": 0.6666666666666666,
+    "b_only_correct": 0,
+    "n": 15,
+    "p_value": 1.0
+   },
+   "multiple": {
+    "a_acc": 0.95,
+    "a_only_correct": 0,
+    "b_acc": 1.0,
+    "b_only_correct": 1,
+    "n": 20,
+    "p_value": 1.0
+   },
+   "parallel": {
+    "a_acc": 0.8,
+    "a_only_correct": 0,
+    "b_acc": 0.8,
+    "b_only_correct": 0,
+    "n": 20,
+    "p_value": 1.0
+   },
+   "parallel_multiple": {
+    "a_acc": 0.8,
+    "a_only_correct": 1,
+    "b_acc": 0.75,
+    "b_only_correct": 0,
+    "n": 20,
+    "p_value": 1.0
+   },
+   "simple_java": {
+    "a_acc": 0.9,
+    "a_only_correct": 0,
+    "b_acc": 0.9,
+    "b_only_correct": 0,
+    "n": 10,
+    "p_value": 1.0
+   },
+   "simple_javascript": {
+    "a_acc": 1.0,
+    "a_only_correct": 1,
+    "b_acc": 0.8,
+    "b_only_correct": 0,
+    "n": 5,
+    "p_value": 1.0
+   },
+   "simple_python": {
+    "a_acc": 0.9,
+    "a_only_correct": 0,
+    "b_acc": 0.9,
+    "b_only_correct": 0,
+    "n": 40,
+    "p_value": 1.0
+   }
+  },
+  "n_common": 347,
+  "overall": {
+   "a_acc": 0.8357348703170029,
+   "a_only_correct": 5,
+   "b_acc": 0.8386167146974063,
+   "b_only_correct": 6,
+   "n": 347,
+   "p_value": 1.0
+  }
+ }
+}
