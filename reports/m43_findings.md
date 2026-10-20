@@ -30,13 +30,37 @@ The engine is restarted before every run. Full tables: [m43_slots.md](m43_slots.
   time is faster than two.
 - **Four slots:** they do help (+30% req/s, aggregate decode about 21 tok/s), but the median
   latency is 11.8 s, the 4.6 GiB KV cache pushes peak RSS to 11.3 GB, and the Mac swaps.
-- **Hypothesis, not verified here:** llama.cpp's Metal kernels for batched Q4_K matrix
-  multiplication are less efficient at batch 2 than its single-sequence path. A llama-bench
-  batch-size scan would confirm or refute this.
+- **Cause (confirmed by the batch scan below):** llama.cpp's batch-2 Q4_K decode on Metal is
+  barely faster than batch 1, and prefill does not batch at all.
 - **Single-stream latency** does not depend on the slot count (3.73–3.88 s).
 - **Practical setting:** for this workload on this machine, 2 slots behave like 1 slot with
   queueing. Admission at 2 slots with a bounded queue is what protects latency. Each extra
   concurrent client adds about one service time to the median.
+
+### Why: batch-2 decoding is slow for Q4_K, and prefill does not batch
+
+`llama-batched-bench` (llama.cpp b11669, no gateway) runs a 1,024-token prompt plus 64
+generated tokens per sequence, with 1, 2, 4 and 8 parallel sequences
+(`results/bench/batched/*.jsonl`; command in its README note below).
+
+| parallel sequences | Q4_K_M decode tok/s (total) | Q8_0 decode tok/s (total) | prefill tok/s (Q4 / Q8) |
+|---|---|---|---|
+| 1 | 25.0 | 20.1 | 250 / 271 |
+| 2 | **27.3 (+9%)** | 33.5 (+67%) | 252 / 282 |
+| 4 | 58.3 | 63.1 | 251 / 279 |
+| 8 | 106.0 | 107.2 | 251 / 285 |
+
+- **Batch 2:** decoding 2 sequences together is barely faster than 1 for Q4_K_M, while Q8_0
+  gains 67% and both scale well from 4 upwards. This confirms the hypothesis above for this
+  llama.cpp build on Metal.
+- **Prefill:** throughput is flat in the number of sequences (compute-bound). A BFCL request
+  (~800 prompt tokens, ~55 generated) spends more time in prefill (~4 s at 1,024 tokens) than in
+  decode (~2.6 s). So parallelism can at best speed up the smaller part of the work. This is
+  also why the serving sweep shows lower per-request decode under concurrency than the batch
+  scan: one request's prefill stalls the other's decode steps.
+
+Command: `llama-batched-bench -m <model> -c 9216 -b 2048 -ub 512 -ngl 99 -npp 1024 -ntg 64
+-npl 1,2,4,8 --output-format jsonl`.
 
 ## 2. Q8_0 vs Q4_K_M: same single-stream latency, better under concurrency, more memory
 

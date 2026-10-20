@@ -1,0 +1,265 @@
+{
+ "all_pass": true,
+ "fingerprint": {
+  "git": {
+   "dirty": true,
+   "sha": "12161ab6546a100608fea3bf8ebfc9aef0b7c67d"
+  },
+  "host": {
+   "battery": "-InternalBattery-0 (id=24641635)\t42%; discharging; 1:56 remaining present: true",
+   "chip": "Apple M1 Pro",
+   "macos_version": "26.5",
+   "memory_gb": 16,
+   "os": "Darwin",
+   "power_source": "battery",
+   "python": "3.12.12"
+  }
+ },
+ "scenarios": {
+  "cancel": {
+   "checks": [
+    {
+     "check": "stream had started before the disconnect",
+     "detail": 28,
+     "pass": true
+    },
+    {
+     "check": "engine became idle within 10 s of the disconnect",
+     "detail": 0.23238591600238578,
+     "pass": true
+    },
+    {
+     "check": "engine stopped well short of the 1024-token budget (< 300)",
+     "detail": 29.0,
+     "pass": true
+    }
+   ],
+   "chunks_received_before_disconnect": 28,
+   "duration_s": 4.0,
+   "engine_idle_after_s": 0.23,
+   "engine_tokens_generated": 29.0,
+   "pass": true
+  },
+  "deadline": {
+   "checks": [
+    {
+     "check": "504 deadline_exceeded",
+     "detail": [
+      504,
+      "deadline_exceeded"
+     ],
+     "pass": true
+    },
+    {
+     "check": "returned close to the 2 s deadline (< 4 s)",
+     "detail": 2.01,
+     "pass": true
+    },
+    {
+     "check": "gateway held the permit while the engine kept prefilling",
+     "detail": 1.0,
+     "pass": true
+    },
+    {
+     "check": "gateway never counted fewer requests than the engine was running",
+     "detail": 0,
+     "pass": true
+    },
+    {
+     "check": "permit released within 5 s of the engine slot freeing",
+     "detail": 0.009343333003926091,
+     "pass": true
+    }
+   ],
+   "duration_s": 33.7,
+   "elapsed_s": 2.01,
+   "error_code": "deadline_exceeded",
+   "held_permits_after_504": 1.0,
+   "observation_engine_busy_after_504_s": 30.4,
+   "pass": true,
+   "permit_hold_s": 30.400234166998416,
+   "samples_engine_busier_than_gateway": 0,
+   "status": 504
+  },
+  "drain": {
+   "checks": [
+    {
+     "check": "/readyz 503 while draining",
+     "detail": 503,
+     "pass": true
+    },
+    {
+     "check": "new requests rejected 503 draining",
+     "detail": [
+      503,
+      "draining"
+     ],
+     "pass": true
+    },
+    {
+     "check": "both in-flight streams completed fully",
+     "detail": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "check": "process exited within the 30 s drain budget (+5 s)",
+     "detail": 10.910895417000575,
+     "pass": true
+    }
+   ],
+   "duration_s": 13.2,
+   "exit_after_sigterm_s": 10.9,
+   "inflight_completed": [
+    true,
+    true
+   ],
+   "new_request_during_drain": [
+    503,
+    "draining"
+   ],
+   "pass": true,
+   "readyz_during_drain": 503
+  },
+  "engine_crash": {
+   "checks": [
+    {
+     "check": "in-flight stream ended with an in-band engine error",
+     "detail": "engine_error",
+     "pass": true
+    },
+    {
+     "check": "/readyz reported 503 within 15 s",
+     "detail": 0.006712666996463668,
+     "pass": true
+    },
+    {
+     "check": "requests during the outage fail fast with 503 engine_unavailable",
+     "detail": [
+      503,
+      0.002
+     ],
+     "pass": true
+    },
+    {
+     "check": "engine_up gauge reads 0 during the outage",
+     "detail": 0.0,
+     "pass": true
+    },
+    {
+     "check": "/readyz back to 200 after engine restart",
+     "detail": 0.013264332999824546,
+     "pass": true
+    },
+    {
+     "check": "requests succeed after recovery",
+     "detail": 200,
+     "pass": true
+    }
+   ],
+   "crash_to_recovered_s": 2.1,
+   "duration_s": 4.9,
+   "engine_restart_healthy_s": 1.6,
+   "engine_up_gauge_during_outage": 0.0,
+   "in_band_error": "engine_error",
+   "pass": true,
+   "readyz_503_after_crash_s": 0.01,
+   "recovered_request_status": 200,
+   "request_during_outage": {
+    "code": "engine_unavailable",
+    "elapsed_s": 0.002,
+    "status": 503
+   },
+   "restart_to_ready_s": 2.0,
+   "stream_status": 200
+  },
+  "overload": {
+   "checks": [
+    {
+     "check": "some requests were shed with 429",
+     "detail": {
+      "200": 8,
+      "429": 82
+     },
+     "pass": true
+    },
+    {
+     "check": "no 5xx responses",
+     "detail": {
+      "200": 8,
+      "429": 82
+     },
+     "pass": true
+    },
+    {
+     "check": "queue_full 429s are immediate (p95 < 0.5 s)",
+     "detail": {
+      "n": 47,
+      "p95_s": 0.007732209000096191
+     },
+     "pass": true
+    },
+    {
+     "check": "queue_timeout 429s arrive at the 5 s queue timeout (4.5-6.5 s)",
+     "detail": {
+      "max_s": 5.020741582993651,
+      "min_s": 5.003449083000305,
+      "n": 9
+     },
+     "pass": true
+    },
+    {
+     "check": "429 responses carry Retry-After",
+     "detail": [
+      "1",
+      "1",
+      "1",
+      "1",
+      "1"
+     ],
+     "pass": true
+    },
+    {
+     "check": "engine never exceeded its 2 slots",
+     "detail": 2.0,
+     "pass": true
+    },
+    {
+     "check": "queue depth never exceeded its bound (4)",
+     "detail": 4.0,
+     "pass": true
+    },
+    {
+     "check": "admitted requests completed",
+     "detail": 8,
+     "pass": true
+    }
+   ],
+   "duration_s": 34.4,
+   "load": {
+    "duration_s": 30.0,
+    "max_tokens": 96,
+    "rate_rps": 3.0,
+    "requests": 90
+   },
+   "max_engine_processing": 2.0,
+   "max_queue_depth": 4.0,
+   "pass": true,
+   "rejected_delta": {
+    "reason=\"queue_full\"": 66.0,
+    "reason=\"queue_timeout\"": 16.0
+   },
+   "rejections_by_code": {
+    "queue_full": 47,
+    "queue_timeout": 9
+   },
+   "statuses": {
+    "200": 8,
+    "429": 82
+   }
+  }
+ },
+ "started_at": "2026-10-20T02:35:12+00:00"
+}
